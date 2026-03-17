@@ -1,0 +1,13 @@
+/db
+/target
+/public
+/logs
+/server.log
+
+.env
+.env.local
+.env.*.local
+
+*.log
+
+public/*.db
