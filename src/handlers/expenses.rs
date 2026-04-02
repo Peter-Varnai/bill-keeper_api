@@ -50,9 +50,12 @@ pub async fn get_expenses(
                 .collect();
             HttpResponse::Ok().json(expenses)
         }
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to fetch expenses: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("get_expenses", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to fetch expenses: {}", e)
+            }))
+        }
     }
 }
 
@@ -89,9 +92,12 @@ pub async fn update_expense_bill(
         Ok(_) => HttpResponse::Ok().json(serde_json::json!({
             "message": format!("Updated bill number to {} for expense {}", params.new_number, id)
         })),
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to update bill number: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("update_expense_bill", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to update bill number: {}", e)
+            }))
+        }
     }
 }
 
@@ -128,9 +134,12 @@ pub async fn update_expense_type(
         Ok(_) => HttpResponse::Ok().json(serde_json::json!({
             "message": format!("Updated expense type to {} for expense {}", params.new_number, id)
         })),
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to update expense type: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("update_expense_type", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to update expense type: {}", e)
+            }))
+        }
     }
 }
 
@@ -167,9 +176,12 @@ pub async fn update_expense_application(
         Ok(_) => HttpResponse::Ok().json(serde_json::json!({
             "message": format!("Updated application to {} for expense {}", params.new_number, id)
         })),
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to update application: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("update_expense_application", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to update application: {}", e)
+            }))
+        }
     }
 }
 
@@ -208,9 +220,12 @@ pub async fn update_expense_cash(
         Ok(_) => HttpResponse::Ok().json(serde_json::json!({
             "message": format!("Updated cash status to {} for expense {}", is_cash, id)
         })),
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to update cash status: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("update_expense_cash", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to update cash status: {}", e)
+            }))
+        }
     }
 }
 
@@ -291,9 +306,12 @@ pub async fn create_expense(
                 is_cash: data.is_cash,
             })
         }
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to create expense: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("create_expense", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to create expense: {}", e)
+            }))
+        }
     }
 }
 
@@ -406,12 +424,15 @@ pub async fn check_duplicates(
 
 #[derive(Deserialize)]
 pub struct CsvImportRequest {
-    partner_col: String,
-    amount_col: String,
-    date_col: String,
+    #[allow(dead_code)]
+    partner_col: Option<String>,
+    #[allow(dead_code)]
+    amount_col: Option<String>,
+    #[allow(dead_code)]
+    date_col: Option<String>,
     date_format: String,
     rows: Vec<CsvRow>,
-    group_id: Option<i32>,
+    data_group: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -471,7 +492,14 @@ pub async fn bulk_import_expenses(
     pool: web::Data<DbPool>,
     data: web::Json<CsvImportRequest>,
 ) -> impl Responder {
-    let group_id = data.group_id.unwrap_or(1);
+    let group_id = match data.data_group {
+        Some(c) => c,
+        None => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("No data group found in request!")
+            }));
+        }
+    };
 
     let client = match pool.pool.get().await {
         Ok(c) => c,
@@ -622,8 +650,11 @@ pub async fn delete_expense(
                 }))
             }
         }
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to delete expense: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("delete_expense", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to delete expense: {}", e)
+            }))
+        }
     }
 }

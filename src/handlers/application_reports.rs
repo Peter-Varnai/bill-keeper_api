@@ -65,25 +65,23 @@ pub async fn get_application_reports(
         Ok(rows) => {
             let reports: Vec<ApplicationReport> = rows
                 .iter()
-                .map(|row| {
-                    let deadline: Option<NaiveDate> = row.get(5);
-                    dbg!(&deadline);
-
-                    ApplicationReport {
-                        id: row.get(0),
-                        data_group: row.get(1),
-                        name: row.get(2),
-                        amount: row.get::<_, String>(3).parse().unwrap_or(0.0),
-                        created_at: row.get(4),
-                        submission_deadline: deadline,
-                    }
+                .map(|row| ApplicationReport {
+                    id: row.get(0),
+                    data_group: row.get(1),
+                    name: row.get(2),
+                    amount: row.get::<_, String>(3).parse().unwrap_or(0.0),
+                    created_at: row.get(4),
+                    submission_deadline: row.get(5),
                 })
                 .collect();
             HttpResponse::Ok().json(reports)
         }
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to fetch application reports: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("get_application_reports", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to fetch application reports: {}", e)
+            }))
+        }
     }
 }
 
@@ -128,9 +126,12 @@ pub async fn create_application_report(
                 "message": format!("Application report '{}' created successfully", data.name)
             }))
         }
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to create application report: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("create_application_report", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to create application report: {}", e)
+            }))
+        }
     }
 }
 
@@ -294,9 +295,12 @@ pub async fn delete_application_report(
                     "message": "Application report deleted successfully"
                 }))
             }
-            Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Failed to delete application report: {}", e)
-            })),
+            Err(e) => {
+                crate::db::log_db_error("delete_application_report", &e);
+                HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("Failed to delete application report: {}", e)
+                }))
+            }
         }
     }
 }

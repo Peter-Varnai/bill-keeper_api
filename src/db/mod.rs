@@ -1,8 +1,30 @@
 use deadpool_postgres::{Config, Pool};
 use std::env;
+use tokio_postgres::Error as PgError;
 
 pub struct DbPool {
     pub pool: Pool,
+}
+
+pub fn log_db_error(operation: &str, e: &PgError) {
+    let pg_code = e.code().map(|c| c.code()).unwrap_or("unknown");
+    
+    let detail = if let Some(dbe) = e.as_db_error() {
+        dbe.detail().map(|s| s.to_string()).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    
+    let hint = if let Some(dbe) = e.as_db_error() {
+        dbe.hint().map(|s| s.to_string()).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    
+    log::error!(
+        "Database error during {}: code={}, detail={}, hint={}",
+        operation, pg_code, detail, hint
+    );
 }
 
 impl DbPool {

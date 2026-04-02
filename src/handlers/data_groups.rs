@@ -63,9 +63,12 @@ pub async fn get_data_groups(pool: web::Data<DbPool>) -> impl Responder {
                 .collect();
             HttpResponse::Ok().json(groups)
         }
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to fetch data groups: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("get_data_groups", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to fetch data groups: {}", e)
+            }))
+        }
     }
 }
 
@@ -117,8 +120,11 @@ pub async fn create_data_group(
                 message: format!("Data group '{}' created successfully", data.name),
             })
         }
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to create data group: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("create_data_group", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to create data group: {}", e)
+            }))
+        }
     }
 }

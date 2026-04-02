@@ -60,9 +60,12 @@ pub async fn get_bills(
                 .collect();
             HttpResponse::Ok().json(bills)
         }
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to fetch bills: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("get_bills", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to fetch bills: {}", e)
+            }))
+        }
     }
 }
 
@@ -111,9 +114,12 @@ pub async fn get_bill(
                 HttpResponse::NotFound().body("Bill not found")
             }
         }
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to fetch bill: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("get_bill", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to fetch bill: {}", e)
+            }))
+        }
     }
 }
 
@@ -166,9 +172,12 @@ pub async fn update_bill(
                 }))
             }
         }
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to update bill: {}", e)
-        })),
+        Err(e) => {
+            crate::db::log_db_error("update_bill", &e);
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Failed to update bill: {}", e)
+            }))
+        }
     }
 }
 
