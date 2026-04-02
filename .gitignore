@@ -3,6 +3,7 @@
 /public
 /logs
 /server.log
+/db_migrate
 
 .env
 .env.local

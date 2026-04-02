@@ -1,5 +1,4 @@
 use actix_web::{delete, get, patch, post, web, HttpResponse, Responder};
-use rusqlite::params;
 use std::collections::HashMap;
 use crate::db::DbPool;
 use crate::models::{Expense, BillNumberUpdate};
@@ -8,50 +7,52 @@ use serde::Deserialize;
 #[get("/expenses")]
 pub async fn get_expenses(
     pool: web::Data<DbPool>,
-    query: web::Query<HashMap<String, String>>
+    query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
-    // Get group_id from query, default to 1
-    let group_id = query.get("group_id")
+    let group_id = query
+        .get("group_id")
         .and_then(|v| v.parse::<i32>().ok())
         .unwrap_or(1);
-    
-    // Get table names from data_groups
-    let expenses_table = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_table_names(&dg_conn, group_id) {
-            Ok((exp_table, _)) => exp_table,
-            Err(_) => {
-                return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
-                }));
-            }
+
+    let client = match pool.pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
         }
     };
-    
-    let conn = pool.expenses_conn.lock().unwrap();
-    
-    let query_sql = format!("SELECT * FROM {}", expenses_table);
-    let mut stmt = conn.prepare(&query_sql).unwrap();
-    let mut rows = stmt.query([]).unwrap();
-    let mut expenses = Vec::new();
 
-    while let Some(row) = rows.next().unwrap() {
-        expenses.push(Expense {
-            id: row.get(0).unwrap(),
-            date: row.get(1).unwrap(),
-            partner: row.get(2).unwrap(),
-            amount: {
-                let raw: String = row.get(3).unwrap();
-                raw.replace(",", ".").parse::<f64>().unwrap_or(0.0)
-            },
-            expense_type: row.get(4).unwrap(),
-            bill: row.get(5).unwrap(),
-            application: row.get(6).unwrap(),
-            Bargeldabhebung: row.get(7).unwrap(),
-        });
+    let result = client
+        .query(
+            "SELECT id, data_group, date, partner, amount::text, expense_type, bill, application, is_cash 
+             FROM expenses WHERE data_group = $1 ORDER BY id",
+            &[&group_id],
+        )
+        .await;
+
+    match result {
+        Ok(rows) => {
+            let expenses: Vec<Expense> = rows
+                .iter()
+                .map(|row| Expense {
+                    id: row.get(0),
+                    data_group: row.get(1),
+                    date: row.get(2),
+                    partner: row.get(3),
+                    amount: row.get::<_, String>(4).parse().unwrap_or(0.0),
+                    expense_type: row.get(5),
+                    bill: row.get(6),
+                    application: row.get(7),
+                    is_cash: row.get(8),
+                })
+                .collect();
+            HttpResponse::Ok().json(expenses)
+        }
+        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to fetch expenses: {}", e)
+        })),
     }
-
-    HttpResponse::Ok().json(expenses)
 }
 
 #[patch("/expenses/{id}/bill")]
@@ -59,39 +60,38 @@ pub async fn update_expense_bill(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
     params: web::Json<BillNumberUpdate>,
-    query: web::Query<HashMap<String, String>>
+    query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
     let id = path.into_inner();
-    
-    // Get group_id from query, default to 1
-    let group_id = query.get("group_id")
+    let group_id = query
+        .get("group_id")
         .and_then(|v| v.parse::<i32>().ok())
         .unwrap_or(1);
-    
-    // Get table names from data_groups
-    let expenses_table = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_table_names(&dg_conn, group_id) {
-            Ok((exp_table, _)) => exp_table,
-            Err(_) => {
-                return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
-                }));
-            }
+
+    let client = match pool.pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
         }
     };
-    
-    let conn = pool.expenses_conn.lock().unwrap();
 
-    let sql = format!("UPDATE {} SET bill = ?1 WHERE id = ?2", expenses_table);
-    conn.execute(
-        &sql,
-        params![params.new_number, id]
-    ).expect("failed to update bill number");
+    let result = client
+        .execute(
+            "UPDATE expenses SET bill = $1 WHERE id = $2 AND data_group = $3",
+            &[&params.new_number, &id, &group_id],
+        )
+        .await;
 
-    HttpResponse::Ok().json(serde_json::json!({
-        "message": format!("Updated bill number to {} for expense {}", params.new_number, id)
-    }))
+    match result {
+        Ok(_) => HttpResponse::Ok().json(serde_json::json!({
+            "message": format!("Updated bill number to {} for expense {}", params.new_number, id)
+        })),
+        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to update bill number: {}", e)
+        })),
+    }
 }
 
 #[patch("/expenses/{id}/type")]
@@ -99,39 +99,38 @@ pub async fn update_expense_type(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
     params: web::Json<BillNumberUpdate>,
-    query: web::Query<HashMap<String, String>>
+    query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
     let id = path.into_inner();
-    
-    // Get group_id from query, default to 1
-    let group_id = query.get("group_id")
+    let group_id = query
+        .get("group_id")
         .and_then(|v| v.parse::<i32>().ok())
         .unwrap_or(1);
-    
-    // Get table names from data_groups
-    let expenses_table = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_table_names(&dg_conn, group_id) {
-            Ok((exp_table, _)) => exp_table,
-            Err(_) => {
-                return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
-                }));
-            }
+
+    let client = match pool.pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
         }
     };
-    
-    let conn = pool.expenses_conn.lock().unwrap();
 
-    let sql = format!("UPDATE {} SET expense_type = ?1 WHERE id = ?2", expenses_table);
-    conn.execute(
-        &sql,
-        params![params.new_number, id]
-    ).expect("failed to update expense type");
+    let result = client
+        .execute(
+            "UPDATE expenses SET expense_type = $1 WHERE id = $2 AND data_group = $3",
+            &[&params.new_number, &id, &group_id],
+        )
+        .await;
 
-    HttpResponse::Ok().json(serde_json::json!({
-        "message": format!("Updated expense type to {} for expense {}", params.new_number, id)
-    }))
+    match result {
+        Ok(_) => HttpResponse::Ok().json(serde_json::json!({
+            "message": format!("Updated expense type to {} for expense {}", params.new_number, id)
+        })),
+        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to update expense type: {}", e)
+        })),
+    }
 }
 
 #[patch("/expenses/{id}/application")]
@@ -139,39 +138,38 @@ pub async fn update_expense_application(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
     params: web::Json<BillNumberUpdate>,
-    query: web::Query<HashMap<String, String>>
+    query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
     let id = path.into_inner();
-    
-    // Get group_id from query, default to 1
-    let group_id = query.get("group_id")
+    let group_id = query
+        .get("group_id")
         .and_then(|v| v.parse::<i32>().ok())
         .unwrap_or(1);
-    
-    // Get table names from data_groups
-    let expenses_table = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_table_names(&dg_conn, group_id) {
-            Ok((exp_table, _)) => exp_table,
-            Err(_) => {
-                return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
-                }));
-            }
+
+    let client = match pool.pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
         }
     };
-    
-    let conn = pool.expenses_conn.lock().unwrap();
 
-    let sql = format!("UPDATE {} SET application = ?1 WHERE id = ?2", expenses_table);
-    conn.execute(
-        &sql,
-        params![params.new_number, id]
-    ).expect("failed to update application");
+    let result = client
+        .execute(
+            "UPDATE expenses SET application = $1 WHERE id = $2 AND data_group = $3",
+            &[&params.new_number, &id, &group_id],
+        )
+        .await;
 
-    HttpResponse::Ok().json(serde_json::json!({
-        "message": format!("Updated application to {} for expense {}", params.new_number, id)
-    }))
+    match result {
+        Ok(_) => HttpResponse::Ok().json(serde_json::json!({
+            "message": format!("Updated application to {} for expense {}", params.new_number, id)
+        })),
+        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to update application: {}", e)
+        })),
+    }
 }
 
 #[patch("/expenses/{id}/cash")]
@@ -179,42 +177,42 @@ pub async fn update_expense_cash(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
     params: web::Json<BillNumberUpdate>,
-    query: web::Query<HashMap<String, String>>
+    query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
     let id = path.into_inner();
-    
-    // Get group_id from query, default to 1
-    let group_id = query.get("group_id")
+    let group_id = query
+        .get("group_id")
         .and_then(|v| v.parse::<i32>().ok())
         .unwrap_or(1);
-    
-    // Get table names from data_groups
-    let expenses_table = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_table_names(&dg_conn, group_id) {
-            Ok((exp_table, _)) => exp_table,
-            Err(_) => {
-                return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
-                }));
-            }
+
+    let is_cash = params.new_number != 0;
+
+    let client = match pool.pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
         }
     };
-    
-    let conn = pool.expenses_conn.lock().unwrap();
 
-    let sql = format!("UPDATE {} SET Bargeldabhebung = ?1 WHERE id = ?2", expenses_table);
-    conn.execute(
-        &sql,
-        params![params.new_number, id]
-    ).expect("failed to update cash status");
+    let result = client
+        .execute(
+            "UPDATE expenses SET is_cash = $1 WHERE id = $2 AND data_group = $3",
+            &[&is_cash, &id, &group_id],
+        )
+        .await;
 
-    HttpResponse::Ok().json(serde_json::json!({
-        "message": format!("Updated cash status to {} for expense {}", params.new_number, id)
-    }))
+    match result {
+        Ok(_) => HttpResponse::Ok().json(serde_json::json!({
+            "message": format!("Updated cash status to {} for expense {}", is_cash, id)
+        })),
+        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to update cash status: {}", e)
+        })),
+    }
 }
 
-// Request body for creating a single expense
 #[derive(Deserialize)]
 pub struct CreateExpenseRequest {
     partner: String,
@@ -223,7 +221,7 @@ pub struct CreateExpenseRequest {
     expense_type: Option<i32>,
     bill: Option<i32>,
     application: Option<i32>,
-    Bargeldabhebung: Option<bool>,
+    is_cash: Option<bool>,
     group_id: Option<i32>,
 }
 
@@ -233,163 +231,103 @@ pub async fn create_expense(
     data: web::Json<CreateExpenseRequest>,
 ) -> impl Responder {
     let group_id = data.group_id.unwrap_or(1);
-    
-    // Get table names from data_groups
-    let expenses_table = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_table_names(&dg_conn, group_id) {
-            Ok((exp_table, _)) => exp_table,
-            Err(_) => {
-                return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
-                }));
-            }
-        }
-    };
-    
-    // Validate required fields
+
     if data.partner.trim().is_empty() {
         return HttpResponse::BadRequest().json(serde_json::json!({
             "error": "Partner field is required"
         }));
     }
-    
-    // Parse amount
+
     let amount_normalized = normalize_amount(&data.amount);
     if amount_normalized.is_none() {
         return HttpResponse::BadRequest().json(serde_json::json!({
             "error": format!("Invalid amount format: {}", data.amount)
         }));
     }
-    
-    let conn = pool.expenses_conn.lock().unwrap();
-    
-    // Insert the expense
-    let sql = format!(
-        "INSERT INTO {} (date, partner, amount, expense_type, bill, application, Bargeldabhebung) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        expenses_table
-    );
-    
-    let result = conn.execute(
-        &sql,
-        params![
-            data.date,
-            data.partner.trim(),
-            format!("{:.2}", amount_normalized.unwrap()),
-            data.expense_type.unwrap_or(0),
-            data.bill.unwrap_or(0),
-            data.application.unwrap_or(0),
-            if data.Bargeldabhebung.unwrap_or(false) { 1 } else { 0 }
-        ],
-    );
-    
+
+    let amount_val = amount_normalized.unwrap();
+
+    let client = match pool.pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
+        }
+    };
+
+    let result = client
+        .query(
+            "INSERT INTO expenses (data_group, date, partner, amount, expense_type, bill, application, is_cash) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+            &[
+                &group_id,
+                &data.date,
+                &data.partner.trim(),
+                &amount_val,
+                &data.expense_type.unwrap_or(0),
+                &data.bill,
+                &data.application,
+                &data.is_cash.unwrap_or(false),
+            ],
+        )
+        .await;
+
     match result {
-        Ok(_) => {
-            let new_id = conn.last_insert_rowid() as u16;
+        Ok(rows) => {
+            let new_id = rows.first().map(|r| r.get::<_, i32>(0)).unwrap_or(0);
             HttpResponse::Created().json(Expense {
                 id: new_id,
+                data_group: group_id,
                 date: data.date.clone(),
                 partner: data.partner.clone(),
-                amount: amount_normalized.unwrap(),
-                expense_type: data.expense_type.unwrap_or(0) as u16,
-                bill: data.bill.unwrap_or(0) as u16,
-                application: data.application.map(|a| a as u8),
-                Bargeldabhebung: data.Bargeldabhebung,
+                amount: amount_val,
+                expense_type: data.expense_type.unwrap_or(0),
+                bill: data.bill,
+                application: data.application,
+                is_cash: data.is_cash,
             })
         }
-        Err(e) => {
-            HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Failed to create expense: {}", e)
-            }))
-        }
+        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to create expense: {}", e)
+        })),
     }
 }
 
-/// Helper function to normalize amount strings
-/// Supports formats like: "1234.56", "1,234.56", "1.234,56", "1234,56"
 fn normalize_amount(value: &str) -> Option<f64> {
     let clean = value.trim();
-    
     if clean.is_empty() {
         return None;
     }
-    
-    // Find last comma or dot
+
     let last_comma = clean.rfind(',');
     let last_dot = clean.rfind('.');
-    
+
     let result = match (last_comma, last_dot) {
         (Some(comma_pos), Some(dot_pos)) => {
             if comma_pos > dot_pos {
-                // European format: 1.234,56 -> 1234.56
                 clean.replace(".", "").replace(",", ".")
             } else {
-                // US format: 1,234.56 -> 1234.56
                 clean.replace(",", "")
             }
         }
         (Some(_), None) => {
-            // Only comma present: might be decimal separator (European)
-            // Check if it looks like a decimal (only 1-2 digits after comma)
             if let Some(comma_pos) = last_comma {
                 let after_comma = clean.len() - comma_pos - 1;
                 if after_comma <= 2 {
                     clean.replace(",", ".")
                 } else {
-                    // It's a thousands separator
                     clean.replace(",", "")
                 }
             } else {
                 clean.to_string()
             }
         }
-        (None, Some(_)) => {
-            // Only dot present: standard decimal
-            clean.to_string()
-        }
+        (None, Some(_)) => clean.to_string(),
         (None, None) => clean.to_string(),
     };
-    
-    result.parse::<f64>().ok()
-}
 
-/// Check if an expense already exists (duplicate detection)
-fn check_duplicate(
-    conn: &rusqlite::Connection,
-    table_name: &str,
-    partner: &str,
-    amount: f64,
-    date: &Option<String>,
-) -> Result<Option<Expense>, rusqlite::Error> {
-    let sql = format!(
-        "SELECT id, date, partner, amount, expense_type, bill, application, Bargeldabhebung 
-         FROM {} 
-         WHERE partner = ?1 AND amount = ?2 AND date = ?3 
-         LIMIT 1",
-        table_name
-    );
-    
-    let mut stmt = conn.prepare(&sql)?;
-    let mut rows = stmt.query(params![partner, format!("{:.2}", amount), date])?;
-    
-    if let Some(row) = rows.next()? {
-        Ok(Some(Expense {
-            id: row.get(0)?,
-            date: row.get(1)?,
-            partner: row.get(2)?,
-            amount: {
-                let raw: String = row.get(3)?;
-                raw.replace(",", ".").parse::<f64>().unwrap_or(0.0)
-            },
-            expense_type: row.get(4)?,
-            bill: row.get(5)?,
-            application: row.get(6)?,
-            Bargeldabhebung: row.get(7)?,
-        }))
-    } else {
-        Ok(None)
-    }
+    result.parse::<f64>().ok()
 }
 
 #[derive(Deserialize)]
@@ -417,44 +355,58 @@ pub async fn check_duplicates(
     data: web::Json<CheckDuplicatesRequest>,
 ) -> impl Responder {
     let group_id = data.group_id.unwrap_or(1);
-    
-    // Get table names from data_groups
-    let expenses_table = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_table_names(&dg_conn, group_id) {
-            Ok((exp_table, _)) => exp_table,
-            Err(_) => {
-                return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
-                }));
-            }
+
+    let client = match pool.pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
         }
     };
-    
-    let conn = pool.expenses_conn.lock().unwrap();
+
     let mut duplicates = Vec::new();
-    
+
     for (index, item) in data.expenses.iter().enumerate() {
         if let Some(amount) = normalize_amount(&item.amount) {
-            if let Ok(Some(existing)) = check_duplicate(&conn, &expenses_table, &item.partner, amount, &item.date) {
+            let result = client
+                .query_opt(
+                    "SELECT id, data_group, date, partner, amount::text, expense_type, bill, application, is_cash 
+                     FROM expenses 
+                     WHERE partner = $1 AND amount::text = $2 AND data_group = $3 
+                     LIMIT 1",
+                    &[&item.partner, &format!("{:.2}", amount), &group_id],
+                )
+                .await;
+
+            if let Ok(Some(row)) = result {
                 duplicates.push(DuplicateCheckResult {
                     index,
-                    existing,
+                    existing: Expense {
+                        id: row.get(0),
+                        data_group: row.get(1),
+                        date: row.get(2),
+                        partner: row.get(3),
+                        amount: row.get::<_, String>(4).parse().unwrap_or(0.0),
+                        expense_type: row.get(5),
+                        bill: row.get(6),
+                        application: row.get(7),
+                        is_cash: row.get(8),
+                    },
                 });
             }
         }
     }
-    
+
     HttpResponse::Ok().json(duplicates)
 }
 
-// CSV Import structures
 #[derive(Deserialize)]
 pub struct CsvImportRequest {
     partner_col: String,
     amount_col: String,
     date_col: String,
-    date_format: String,  // "auto-detect", "DD.MM.YYYY", "YYYY-MM-DD", "DD/MM/YYYY", "MM/DD/YYYY"
+    date_format: String,
     rows: Vec<CsvRow>,
     group_id: Option<i32>,
 }
@@ -482,23 +434,16 @@ pub struct CsvImportError {
     reason: String,
 }
 
-/// Parse date string with specified format
 fn parse_date(date_str: &str, format: &str) -> Option<String> {
     use chrono::NaiveDate;
-    
+
     let date_str = date_str.trim();
-    
     if date_str.is_empty() {
         return None;
     }
-    
+
     let formats = if format == "auto-detect" {
-        vec![
-            "%d.%m.%Y",      // DD.MM.YYYY
-            "%Y-%m-%d",      // YYYY-MM-DD
-            "%d/%m/%Y",      // DD/MM/YYYY
-            "%m/%d/%Y",      // MM/DD/YYYY
-        ]
+        vec!["%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"]
     } else {
         match format {
             "DD.MM.YYYY" => vec!["%d.%m.%Y"],
@@ -508,13 +453,13 @@ fn parse_date(date_str: &str, format: &str) -> Option<String> {
             _ => vec!["%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"],
         }
     };
-    
+
     for fmt in formats {
         if let Ok(date) = NaiveDate::parse_from_str(date_str, fmt) {
             return Some(date.format("%Y-%m-%d").to_string());
         }
     }
-    
+
     None
 }
 
@@ -524,30 +469,22 @@ pub async fn bulk_import_expenses(
     data: web::Json<CsvImportRequest>,
 ) -> impl Responder {
     let group_id = data.group_id.unwrap_or(1);
-    
-    // Get table names from data_groups
-    let expenses_table = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_table_names(&dg_conn, group_id) {
-            Ok((exp_table, _)) => exp_table,
-            Err(_) => {
-                return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
-                }));
-            }
+
+    let client = match pool.pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
         }
     };
-    
-    let mut conn = pool.expenses_conn.lock().unwrap();
-    let tx = conn.transaction().unwrap();
-    
+
     let mut inserted = 0;
     let mut duplicates_found = 0;
     let mut duplicates_skipped = 0;
     let mut errors = Vec::new();
-    
+
     for row in &data.rows {
-        // Validate and parse amount
         let amount = match normalize_amount(&row.amount) {
             Some(a) => a,
             None => {
@@ -558,8 +495,7 @@ pub async fn bulk_import_expenses(
                 continue;
             }
         };
-        
-        // Validate partner
+
         if row.partner.trim().is_empty() {
             errors.push(CsvImportError {
                 row: row.row_number,
@@ -567,8 +503,7 @@ pub async fn bulk_import_expenses(
             });
             continue;
         }
-        
-        // Parse date
+
         let date = if row.date.trim().is_empty() {
             None
         } else {
@@ -583,14 +518,21 @@ pub async fn bulk_import_expenses(
                 }
             }
         };
-        
-        // Check for duplicates
-        match check_duplicate(&tx, &expenses_table, &row.partner, amount, &date) {
+
+        let exists = client
+            .query_opt(
+                "SELECT id FROM expenses WHERE partner = $1 AND amount::text = $2 AND data_group = $3 LIMIT 1",
+                &[&row.partner, &format!("{:.2}", amount), &group_id],
+            )
+            .await;
+
+        match exists {
             Ok(Some(_)) => {
                 duplicates_found += 1;
                 duplicates_skipped += 1;
-                continue;  // Skip duplicate
+                continue;
             }
+            Ok(None) => {}
             Err(e) => {
                 errors.push(CsvImportError {
                     row: row.row_number,
@@ -598,28 +540,26 @@ pub async fn bulk_import_expenses(
                 });
                 continue;
             }
-            _ => {}
         }
-        
-        // Insert the expense
-        let sql = format!(
-            "INSERT INTO {} (date, partner, amount, expense_type, bill, application, Bargeldabhebung) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            expenses_table
-        );
-        
-        match tx.execute(
-            &sql,
-            params![
-                date,
-                row.partner.trim(),
-                format!("{:.2}", amount),
-                0,  // expense_type
-                0,  // bill
-                0,  // application
-                0   // Bargeldabhebung (false)
-            ],
-        ) {
+
+        let result = client
+            .query(
+                "INSERT INTO expenses (data_group, date, partner, amount, expense_type, bill, application, is_cash) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+                &[
+                    &group_id,
+                    &date,
+                    &row.partner.trim(),
+                    &amount,
+                    &0,
+                    &Option::<i32>::None,
+                    &Option::<i32>::None,
+                    &false,
+                ],
+            )
+            .await;
+
+        match result {
             Ok(_) => inserted += 1,
             Err(e) => {
                 errors.push(CsvImportError {
@@ -629,13 +569,7 @@ pub async fn bulk_import_expenses(
             }
         }
     }
-    
-    if let Err(e) = tx.commit() {
-        return HttpResponse::InternalServerError().json(serde_json::json!({
-            "error": format!("Failed to commit transaction: {}", e)
-        }));
-    }
-    
+
     HttpResponse::Ok().json(CsvImportResult {
         inserted,
         duplicates_found,
@@ -649,35 +583,33 @@ pub async fn bulk_import_expenses(
 pub async fn delete_expense(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
-    query: web::Query<HashMap<String, String>>
+    query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
     let id = path.into_inner();
-    
-    // Get group_id from query, default to 1
-    let group_id = query.get("group_id")
+    let group_id = query
+        .get("group_id")
         .and_then(|v| v.parse::<i32>().ok())
         .unwrap_or(1);
-    
-    // Get table names from data_groups
-    let expenses_table = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_table_names(&dg_conn, group_id) {
-            Ok((exp_table, _)) => exp_table,
-            Err(_) => {
-                return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
-                }));
-            }
+
+    let client = match pool.pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
         }
     };
-    
-    let conn = pool.expenses_conn.lock().unwrap();
-    
-    // Execute DELETE query
-    let sql = format!("DELETE FROM {} WHERE id = ?1", expenses_table);
-    match conn.execute(&sql, params![id]) {
-        Ok(rows_affected) => {
-            if rows_affected > 0 {
+
+    let result = client
+        .execute(
+            "DELETE FROM expenses WHERE id = $1 AND data_group = $2",
+            &[&id, &group_id],
+        )
+        .await;
+
+    match result {
+        Ok(rows) => {
+            if rows > 0 {
                 HttpResponse::Ok().json(serde_json::json!({
                     "message": format!("Expense {} deleted successfully", id)
                 }))
@@ -687,10 +619,8 @@ pub async fn delete_expense(
                 }))
             }
         }
-        Err(e) => {
-            HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Failed to delete expense: {}", e)
-            }))
-        }
+        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
+            "error": format!("Failed to delete expense: {}", e)
+        })),
     }
 }

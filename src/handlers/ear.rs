@@ -13,51 +13,50 @@ struct EarResponse {
 #[get("/ear")]
 pub async fn get_ear(
     pool: web::Data<DbPool>,
-    query: web::Query<HashMap<String, String>>
+    query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
-    // Get group_id from query, default to 1
-    let group_id = query.get("group_id")
+    let group_id = query
+        .get("group_id")
         .and_then(|v| v.parse::<i32>().ok())
         .unwrap_or(1);
-    
-    // Get table names from data_groups
-    let expenses_table = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_table_names(&dg_conn, group_id) {
-            Ok((exp_table, _)) => exp_table,
-            Err(_) => {
-                return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
-                }));
-            }
+
+    let client = match pool.pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
         }
     };
-    
-    let conn = pool.expenses_conn.lock().unwrap();
-    
-    let query_sql = format!("SELECT * FROM {}", expenses_table);
-    let mut stmt = conn.prepare(&query_sql).unwrap();
-    let mut rows = stmt.query([]).unwrap();
-    let mut expenses = Vec::new();
 
-    while let Some(row) = rows.next().unwrap() {
-        expenses.push(crate::models::Expense {
-            id: row.get(0).unwrap(),
-            date: row.get(1).unwrap(),
-            partner: row.get(2).unwrap(),
-            amount: {
-                let raw: String = row.get(3).unwrap();
-                raw.replace(",", ".").parse::<f64>().unwrap_or(0.0)
-            },
-            expense_type: row.get(4).unwrap(),
-            bill: row.get(5).unwrap(),
-            application: row.get(6).unwrap(),
-            Bargeldabhebung: row.get(7).unwrap(),
-        });
-    }
+    let result = client
+        .query(
+            "SELECT id, data_group, date, partner, amount::text, expense_type, bill, application, is_cash 
+             FROM expenses WHERE data_group = $1",
+            &[&group_id],
+        )
+        .await;
+
+    let expenses: Vec<crate::models::Expense> = match result {
+        Ok(rows) => rows
+            .iter()
+            .map(|row| crate::models::Expense {
+                id: row.get(0),
+                data_group: row.get(1),
+                date: row.get(2),
+                partner: row.get(3),
+                amount: row.get::<_, String>(4).parse().unwrap_or(0.0),
+                expense_type: row.get(5),
+                bill: row.get(6),
+                application: row.get(7),
+                is_cash: row.get(8),
+            })
+            .collect(),
+        _ => vec![],
+    };
 
     let totals = calculate_ear_totals(&expenses);
-    
+
     HttpResponse::Ok().json(EarResponse {
         expenses,
         totals,

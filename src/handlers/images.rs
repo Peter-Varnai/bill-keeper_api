@@ -11,18 +11,30 @@ pub async fn get_image(
 ) -> impl Responder {
     let filename = path.into_inner();
 
-    // Get group_id from query, default to 1
     let group_id = query
         .get("group_id")
         .and_then(|v| v.parse::<i32>().ok())
         .unwrap_or(1);
 
-    // Get storage path for this data group
     let storage_path = {
-        let dg_conn = pool.data_groups_conn.lock().unwrap();
-        match DbPool::get_bills_storage_path(&dg_conn, group_id) {
-            Ok(path) => path,
-            Err(_) => {
+        let client = match pool.pool.get().await {
+            Ok(c) => c,
+            Err(e) => {
+                return HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("Database connection error: {}", e)
+                }));
+            }
+        };
+
+        match client
+            .query_opt(
+                "SELECT bills_storage_path FROM data_groups WHERE id = $1",
+                &[&group_id],
+            )
+            .await
+        {
+            Ok(Some(row)) => row.get::<_, String>(0),
+            _ => {
                 return HttpResponse::NotFound().json(serde_json::json!({
                     "error": format!("Data group {} not found", group_id)
                 }));

@@ -10,19 +10,22 @@ pub fn calculate_summaries(
     let mut summaries = Vec::new();
 
     for app_report in application_reports {
-        let app_id = app_report.id as u8;
+        let app_id = app_report.id;
 
         let app_expenses: Vec<&Expense> = expenses
             .iter()
             .filter(|e| e.application == Some(app_id))
             .collect();
 
-        let total: f64 = app_expenses.iter().map(|e| e.amount).sum();
+        let total: f64 = app_expenses
+            .iter()
+            .map(|e| e.amount.to_string().parse::<f64>().unwrap_or(0.0))
+            .sum();
 
-        // Group by expense_type for details
-        let mut type_map: HashMap<u16, f64> = HashMap::new();
+        let mut type_map: HashMap<i32, f64> = HashMap::new();
         for expense in &app_expenses {
-            *type_map.entry(expense.expense_type).or_insert(0.0) += expense.amount;
+            let amount: f64 = expense.amount.to_string().parse::<f64>().unwrap_or(0.0);
+            *type_map.entry(expense.expense_type).or_insert(0.0) += amount;
         }
 
         let details: Vec<(String, String)> = type_map
@@ -30,19 +33,18 @@ pub fn calculate_summaries(
             .map(|(type_id, amount)| (get_expense_type_name(*type_id), format_amount(*amount)))
             .collect();
 
-        // Check if target is met
         let is_target_met = if app_report.amount > 0.0 {
-            Some(total >= app_report.amount)
+            Some(total >= app_report.amount.to_string().parse::<f64>().unwrap_or(0.0))
         } else {
             None
         };
 
         summaries.push(Summary {
-            application: app_id as i32,
+            application: app_id,
             application_name: app_report.name.clone(),
             total: format_amount(total),
             details,
-            target_amount: Some(app_report.amount),
+            target_amount: Some(app_report.amount.to_string().parse::<f64>().unwrap_or(0.0)),
             is_target_met,
         });
     }
@@ -55,10 +57,10 @@ pub fn calculate_ear_totals(expenses: &[Expense]) -> EarTotals {
     let mut cash_total = 0.0;
 
     for expense in expenses {
-        if expense.Bargeldabhebung == Some(true) {
-            cash_total += expense.amount;
+        if expense.is_cash == Some(true) {
+            cash_total += expense.amount.to_string().parse::<f64>().unwrap_or(0.0);
         } else {
-            bank_total += expense.amount;
+            bank_total += expense.amount.to_string().parse::<f64>().unwrap_or(0.0);
         }
     }
 
@@ -72,7 +74,7 @@ pub fn format_amount(amount: f64) -> String {
     format!("{:.2}", amount)
 }
 
-pub fn get_expense_type_name(expense_type: u16) -> String {
+pub fn get_expense_type_name(expense_type: i32) -> String {
     match expense_type {
         0 => "None".to_string(),
         1 => "Honorare Kurator:innen".to_string(),
