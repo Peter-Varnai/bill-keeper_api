@@ -1,8 +1,9 @@
-use actix_web::{delete, get, patch, post, web, HttpResponse, Responder};
-use std::collections::HashMap;
 use crate::db::DbPool;
-use crate::models::{Expense, BillNumberUpdate};
+use crate::helpers::parse_date_or_panic;
+use crate::models::{BillNumberUpdate, Expense};
+use actix_web::{delete, get, patch, post, web, HttpResponse, Responder};
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[get("/expenses")]
 pub async fn get_expenses(
@@ -273,13 +274,15 @@ pub async fn create_expense(
         )
         .await;
 
+    // let parsed_date = parse_date_or_panic(&data.date);
+
     match result {
         Ok(rows) => {
             let new_id = rows.first().map(|r| r.get::<_, i32>(0)).unwrap_or(0);
             HttpResponse::Created().json(Expense {
                 id: new_id,
                 data_group: group_id,
-                date: data.date.clone(),
+                date: parse_date_or_panic(data.date.clone()),
                 partner: data.partner.clone(),
                 amount: amount_val,
                 expense_type: data.expense_type.unwrap_or(0),

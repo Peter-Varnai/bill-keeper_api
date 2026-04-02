@@ -1,6 +1,8 @@
 use crate::db::DbPool;
+use crate::helpers::parse_date_or_panic;
 use crate::models::ApplicationReport;
 use actix_web::{delete, get, patch, post, web, HttpResponse, Responder};
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -63,13 +65,18 @@ pub async fn get_application_reports(
         Ok(rows) => {
             let reports: Vec<ApplicationReport> = rows
                 .iter()
-                .map(|row| ApplicationReport {
-                    id: row.get(0),
-                    data_group: row.get(1),
-                    name: row.get(2),
-                    amount: row.get::<_, String>(3).parse().unwrap_or(0.0),
-                    created_at: row.get(4),
-                    submission_deadline: row.get(5),
+                .map(|row| {
+                    let deadline: Option<NaiveDate> = row.get(5);
+                    dbg!(&deadline);
+
+                    ApplicationReport {
+                        id: row.get(0),
+                        data_group: row.get(1),
+                        name: row.get(2),
+                        amount: row.get::<_, String>(3).parse().unwrap_or(0.0),
+                        created_at: row.get(4),
+                        submission_deadline: deadline,
+                    }
                 })
                 .collect();
             HttpResponse::Ok().json(reports)

@@ -7,6 +7,7 @@ use std::fs::OpenOptions;
 
 mod db;
 mod handlers;
+mod helpers;
 mod middleware;
 mod models;
 mod routes;
@@ -74,3 +75,4 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await
 }
+
