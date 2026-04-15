@@ -10,7 +10,6 @@ pub fn config(cfg: &mut web::ServiceConfig) {
             .service(crate::handlers::bills::delete_bill)
             .service(crate::handlers::expenses::get_expenses)
             .service(crate::handlers::expenses::create_expense)
-            .service(crate::handlers::expenses::check_duplicates)
             .service(crate::handlers::expenses::bulk_import_expenses)
             .service(crate::handlers::expenses::update_expense_bill)
             .service(crate::handlers::expenses::update_expense_type)

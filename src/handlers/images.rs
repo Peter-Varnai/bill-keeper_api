@@ -1,4 +1,5 @@
 use crate::db::DbPool;
+use crate::helpers::get_data_group_url;
 use actix_web::{get, web, HttpResponse, Responder};
 use std::collections::HashMap;
 use std::path::Path;
@@ -11,32 +12,28 @@ pub async fn get_image(
 ) -> impl Responder {
     let filename = path.into_inner();
 
-    let group_id = query
-        .get("group_id")
-        .and_then(|v| v.parse::<i32>().ok())
-        .unwrap_or(1);
+    let data_group = match get_data_group_url(&query) {
+        Ok(c) => c,
+        Err(response) => return response,
+    };
 
     let storage_path = {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
-            Err(e) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Database connection error: {}", e)
-                }));
-            }
+            Err(response) => return response,
         };
 
         match client
             .query_opt(
                 "SELECT bills_storage_path FROM data_groups WHERE id = $1",
-                &[&group_id],
+                &[&data_group],
             )
             .await
         {
             Ok(Some(row)) => row.get::<_, String>(0),
             _ => {
                 return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
+                    "error": format!("Data group {} not found", data_group)
                 }));
             }
         }
@@ -63,3 +60,4 @@ pub async fn get_image(
         HttpResponse::NotFound().body("File not found")
     }
 }
+

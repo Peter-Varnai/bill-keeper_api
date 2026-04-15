@@ -1,3 +1,4 @@
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -6,7 +7,7 @@ pub struct Bill {
     pub data_group: i32,
     pub filename: String,
     pub amount: Option<f64>,
-    pub date: Option<String>,
+    pub date: Option<chrono::NaiveDate>,
     pub is_cash: Option<bool>,
 }
 
@@ -16,7 +17,7 @@ pub struct Expense {
     pub data_group: i32,
     pub date: Option<chrono::NaiveDate>,
     pub partner: String,
-    pub amount: f64,
+    pub amount: Decimal,
     pub expense_type: i32,
     pub bill: Option<i32>,
     pub application: Option<i32>,

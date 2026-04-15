@@ -1,3 +1,4 @@
+use actix_web::HttpResponse;
 use deadpool_postgres::{Config, Pool};
 use std::env;
 use tokio_postgres::Error as PgError;
@@ -8,22 +9,25 @@ pub struct DbPool {
 
 pub fn log_db_error(operation: &str, e: &PgError) {
     let pg_code = e.code().map(|c| c.code()).unwrap_or("unknown");
-    
+
     let detail = if let Some(dbe) = e.as_db_error() {
         dbe.detail().map(|s| s.to_string()).unwrap_or_default()
     } else {
         String::new()
     };
-    
+
     let hint = if let Some(dbe) = e.as_db_error() {
         dbe.hint().map(|s| s.to_string()).unwrap_or_default()
     } else {
         String::new()
     };
-    
+
     log::error!(
         "Database error during {}: code={}, detail={}, hint={}",
-        operation, pg_code, detail, hint
+        operation,
+        pg_code,
+        detail,
+        hint
     );
 }
 
@@ -44,30 +48,41 @@ impl DbPool {
             ..Default::default()
         };
 
-        let pool = config.create_pool(Some(deadpool_postgres::Runtime::Tokio1), tokio_postgres::NoTls)?;
+        let pool = config.create_pool(
+            Some(deadpool_postgres::Runtime::Tokio1),
+            tokio_postgres::NoTls,
+        )?;
 
         Ok(DbPool { pool })
     }
 
-    pub async fn get_data_group(
-        &self,
-        group_id: i32,
-    ) -> Result<DataGroup, Box<dyn std::error::Error>> {
-        let client = self.pool.get().await?;
-        let row = client
-            .query_one(
-                "SELECT id, name, type, created_at, bills_storage_path 
-                 FROM data_groups WHERE id = $1",
-                &[&group_id],
-            )
-            .await?;
-        
-        Ok(DataGroup {
-            id: row.get(0),
-            name: row.get(1),
-            group_type: row.get(2),
-            created_at: row.get(3),
-            bills_storage_path: row.get(4),
+    // pub async fn get_data_group(
+    //     &self,
+    //     group_id: i32,
+    // ) -> Result<DataGroup, Box<dyn std::error::Error>> {
+    //     let client = self.pool.get().await?;
+    //     let row = client
+    //         .query_one(
+    //             "SELECT id, name, type, created_at, bills_storage_path
+    //              FROM data_groups WHERE id = $1",
+    //             &[&group_id],
+    //         )
+    //         .await?;
+    //
+    //     Ok(DataGroup {
+    //         id: row.get(0),
+    //         name: row.get(1),
+    //         group_type: row.get(2),
+    //         created_at: row.get(3),
+    //         bills_storage_path: row.get(4),
+    //     })
+    // }
+
+    pub async fn get_client(&self) -> Result<deadpool_postgres::Object, HttpResponse> {
+        self.pool.get().await.map_err(|e| {
+            HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }))
         })
     }
 }
@@ -80,3 +95,4 @@ pub struct DataGroup {
     pub created_at: String,
     pub bills_storage_path: String,
 }
+

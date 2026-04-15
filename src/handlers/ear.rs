@@ -1,6 +1,8 @@
-use actix_web::{get, web, HttpResponse, Responder};
 use crate::db::DbPool;
+use crate::helpers::get_data_group_url;
 use crate::services::calculate_ear_totals;
+use actix_web::{get, web, HttpResponse, Responder};
+use rust_decimal::Decimal;
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -15,23 +17,19 @@ pub async fn get_ear(
     pool: web::Data<DbPool>,
     query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
-    let group_id = query
-        .get("group_id")
-        .and_then(|v| v.parse::<i32>().ok())
-        .unwrap_or(1);
-
-    let client = match pool.pool.get().await {
+    let group_id = match get_data_group_url(&query) {
         Ok(c) => c,
-        Err(e) => {
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Database connection error: {}", e)
-            }));
-        }
+        Err(response) => return response,
+    };
+
+    let client = match pool.get_client().await {
+        Ok(c) => c,
+        Err(response) => return response,
     };
 
     let result = client
         .query(
-            "SELECT id, data_group, date, partner, amount::text, expense_type, bill, application, is_cash 
+            "SELECT id, data_group, date, partner, amount, expense_type, bill, application, is_cash 
              FROM expenses WHERE data_group = $1",
             &[&group_id],
         )
@@ -45,20 +43,22 @@ pub async fn get_ear(
                 data_group: row.get(1),
                 date: row.get(2),
                 partner: row.get(3),
-                amount: row.get::<_, String>(4).parse().unwrap_or(0.0),
+                amount: row.get::<_, Decimal>(4),
                 expense_type: row.get(5),
                 bill: row.get(6),
                 application: row.get(7),
                 is_cash: row.get(8),
             })
             .collect(),
-        _ => vec![],
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": format!("Database connection error: {}", e)
+            }));
+        }
     };
 
     let totals = calculate_ear_totals(&expenses);
 
-    HttpResponse::Ok().json(EarResponse {
-        expenses,
-        totals,
-    })
+    HttpResponse::Ok().json(EarResponse { expenses, totals })
 }
+

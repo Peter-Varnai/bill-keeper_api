@@ -1,3 +1,7 @@
+use core::f64;
+
+use chrono::NaiveDate;
+use rust_decimal::Decimal;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
@@ -10,7 +14,7 @@ pub struct CreateDataGroupRequest {
 pub struct CreateExpenseRequest {
     pub partner: String,
     pub amount: String,
-    pub date: Option<String>,
+    pub date: Option<NaiveDate>,
     pub expense_type: Option<i32>,
     pub bill: Option<i32>,
     pub application: Option<i32>,
@@ -28,16 +32,16 @@ pub struct CsvImportRequest {
 #[derive(Deserialize, Debug)]
 pub struct CsvRow {
     pub partner: String,
-    pub amount: String,
-    pub date: String,
+    pub amount: Decimal,
+    pub date: Option<NaiveDate>,
     pub row_number: usize,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct CreateApplicationReportRequest {
     pub name: String,
-    pub amount: f64,
-    pub submission_deadline: Option<String>,
+    pub amount: rust_decimal::Decimal,
+    pub submission_deadline: Option<NaiveDate>,
     pub data_group: i32,
 }
 

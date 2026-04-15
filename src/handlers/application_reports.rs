@@ -1,21 +1,15 @@
+use std::error::Error;
+
 use crate::db::DbPool;
-use crate::helpers::parse_date_or_panic;
-use crate::models::ApplicationReport;
+use crate::helpers::{get_data_group_req, parse_date_or_panic};
+use crate::models::{ApplicationReport, CreateApplicationReportRequest};
 use actix_web::{delete, get, patch, post, web, HttpResponse, Responder};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct GetApplicationReportsQuery {
-    group_id: Option<i32>,
-}
-
-#[derive(Deserialize)]
-pub struct CreateApplicationReportRequest {
-    name: String,
-    amount: f64,
-    submission_deadline: Option<String>,
-    group_id: i32,
+    data_group: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -40,15 +34,14 @@ pub async fn get_application_reports(
     pool: web::Data<DbPool>,
     query: web::Query<GetApplicationReportsQuery>,
 ) -> impl Responder {
-    let group_id = query.group_id.unwrap_or(1);
-
-    let client = match pool.pool.get().await {
+    let data_group = match get_data_group_req(query.data_group) {
         Ok(c) => c,
-        Err(e) => {
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Database connection error: {}", e)
-            }));
-        }
+        Err(response) => return response,
+    };
+
+    let client = match pool.get_client().await {
+        Ok(c) => c,
+        Err(response) => return response,
     };
 
     let result = client
@@ -57,7 +50,7 @@ pub async fn get_application_reports(
              FROM application_reports 
              WHERE data_group = $1 
              ORDER BY created_at DESC",
-            &[&group_id],
+            &[&data_group],
         )
         .await;
 
@@ -90,25 +83,21 @@ pub async fn create_application_report(
     pool: web::Data<DbPool>,
     data: web::Json<CreateApplicationReportRequest>,
 ) -> impl Responder {
-    let client = match pool.pool.get().await {
+    let client = match pool.get_client().await {
         Ok(c) => c,
-        Err(e) => {
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Database connection error: {}", e)
-            }));
-        }
+        Err(response) => return response,
     };
 
-    let amount_val = data.amount;
+    dbg!(&data);
 
     let result = client
         .query(
             "INSERT INTO application_reports (data_group, name, amount, submission_deadline) 
              VALUES ($1, $2, $3, $4) RETURNING id",
             &[
-                &data.group_id,
+                &data.data_group,
                 &data.name,
-                &amount_val,
+                &data.amount,
                 &data.submission_deadline,
             ],
         )
@@ -119,7 +108,7 @@ pub async fn create_application_report(
             let id: i32 = rows.first().map(|r| r.get(0)).unwrap_or(0);
             HttpResponse::Created().json(serde_json::json!({
                 "id": id,
-                "data_group": data.group_id,
+                "data_group": data.data_group,
                 "name": data.name,
                 "amount": data.amount,
                 "submission_deadline": data.submission_deadline,
@@ -127,6 +116,7 @@ pub async fn create_application_report(
             }))
         }
         Err(e) => {
+            eprint!("Full tokio-postgres error: {:?} {:?}", e, e.source());
             crate::db::log_db_error("create_application_report", &e);
             HttpResponse::InternalServerError().json(serde_json::json!({
                 "error": format!("Failed to create application report: {}", e)
@@ -149,13 +139,9 @@ pub async fn update_application_report(
         }));
     }
 
-    let client = match pool.pool.get().await {
+    let client = match pool.get_client().await {
         Ok(c) => c,
-        Err(e) => {
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Database connection error: {}", e)
-            }));
-        }
+        Err(response) => return response,
     };
 
     if let Some(ref name) = data.name {
@@ -216,13 +202,9 @@ pub async fn delete_application_report(
     let id = path.into_inner();
 
     let group_id: Option<i32> = {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
-            Err(e) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Database connection error: {}", e)
-                }));
-            }
+            Err(response) => return response,
         };
 
         match client
@@ -237,7 +219,7 @@ pub async fn delete_application_report(
         }
     };
 
-    let group_id = match group_id {
+    let data_group = match group_id {
         Some(g) => g,
         None => {
             return HttpResponse::NotFound().json(serde_json::json!({
@@ -247,19 +229,15 @@ pub async fn delete_application_report(
     };
 
     {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
-            Err(e) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Database connection error: {}", e)
-                }));
-            }
+            Err(response) => return response,
         };
 
         let result = client
             .execute(
                 "UPDATE expenses SET application = NULL WHERE application = $1 AND data_group = $2",
-                &[&id, &group_id],
+                &[&id, &data_group],
             )
             .await;
 
@@ -271,13 +249,9 @@ pub async fn delete_application_report(
     }
 
     {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
-            Err(e) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Database connection error: {}", e)
-                }));
-            }
+            Err(response) => return response,
         };
 
         let result = client

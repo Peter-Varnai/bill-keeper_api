@@ -1,4 +1,5 @@
 use crate::db::DbPool;
+use crate::helpers::get_data_group_url;
 use crate::models::Bill;
 use crate::services::pdf_converter;
 use actix_multipart::Multipart;
@@ -23,25 +24,21 @@ pub async fn get_bills(
     pool: web::Data<DbPool>,
     query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
-    let group_id = query
-        .get("group_id")
-        .and_then(|v| v.parse::<i32>().ok())
-        .unwrap_or(1);
-
-    let client = match pool.pool.get().await {
+    let data_group = match get_data_group_url(&query) {
         Ok(c) => c,
-        Err(e) => {
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Database connection error: {}", e)
-            }));
-        }
+        Err(response) => return response,
+    };
+
+    let client = match pool.get_client().await {
+        Ok(c) => c,
+        Err(response) => return response,
     };
 
     let result = client
         .query(
             "SELECT id, data_group, filename, amount::text, date, is_cash 
              FROM bills WHERE data_group = $1 ORDER BY id",
-            &[&group_id],
+            &[&data_group],
         )
         .await;
 
@@ -76,25 +73,21 @@ pub async fn get_bill(
     query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
     let id = path.into_inner();
-    let group_id = query
-        .get("group_id")
-        .and_then(|v| v.parse::<i32>().ok())
-        .unwrap_or(1);
-
-    let client = match pool.pool.get().await {
+    let data_group = match get_data_group_url(&query) {
         Ok(c) => c,
-        Err(e) => {
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Database connection error: {}", e)
-            }));
-        }
+        Err(response) => return response,
+    };
+
+    let client = match pool.get_client().await {
+        Ok(c) => c,
+        Err(response) => return response,
     };
 
     let result = client
         .query(
             "SELECT id, data_group, filename, amount::text, date, is_cash 
              FROM bills WHERE id = $1 AND data_group = $2",
-            &[&id, &group_id],
+            &[&id, &data_group],
         )
         .await;
 
@@ -131,18 +124,14 @@ pub async fn update_bill(
     query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
     let id = path.into_inner();
-    let group_id = query
-        .get("group_id")
-        .and_then(|v| v.parse::<i32>().ok())
-        .unwrap_or(1);
-
-    let client = match pool.pool.get().await {
+    let data_group = match get_data_group_url(&query) {
         Ok(c) => c,
-        Err(e) => {
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Database connection error: {}", e)
-            }));
-        }
+        Err(response) => return response,
+    };
+
+    let client = match pool.get_client().await {
+        Ok(c) => c,
+        Err(response) => return response,
     };
 
     let result = client
@@ -155,7 +144,7 @@ pub async fn update_bill(
                 &bill.date,
                 &bill.is_cash,
                 &id,
-                &group_id,
+                &data_group,
             ],
         )
         .await;
@@ -183,7 +172,7 @@ pub async fn update_bill(
 
 #[post("/bills/upload")]
 pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> impl Responder {
-    let mut group_id: Option<i32> = None;
+    let mut data_group: Option<i32> = None;
     let mut files_to_process: Vec<(String, Vec<u8>)> = Vec::new();
 
     while let Ok(Some(mut field)) = payload.try_next().await {
@@ -194,12 +183,12 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
         let field_name = content_disposition.get_name();
 
         match field_name {
-            Some("group_id") => {
+            Some("data_group") => {
                 let mut value = String::new();
                 while let Ok(Some(chunk)) = field.try_next().await {
                     value.push_str(&String::from_utf8_lossy(&chunk));
                 }
-                group_id = value.parse::<i32>().ok();
+                data_group = value.parse::<i32>().ok();
             }
             Some("files") => {
                 if let Some(filename) = content_disposition.get_filename() {
@@ -220,36 +209,32 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
         }
     }
 
-    let group_id = match group_id {
+    let data_group = match data_group {
         Some(id) => id,
         None => {
             return HttpResponse::BadRequest().json(serde_json::json!({
-                "error": "group_id is required"
+                "error": "data_group is required"
             }));
         }
     };
 
     let storage_path = {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
-            Err(e) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Database connection error: {}", e)
-                }));
-            }
+            Err(response) => return response,
         };
 
         match client
             .query_opt(
                 "SELECT bills_storage_path FROM data_groups WHERE id = $1",
-                &[&group_id],
+                &[&data_group],
             )
             .await
         {
             Ok(Some(row)) => row.get::<_, String>(0),
             _ => {
                 return HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Data group {} not found", group_id)
+                    "error": format!("Data group {} not found", data_group)
                 }));
             }
         }
@@ -261,7 +246,7 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
     let mut next_bill_id: i32 = 1;
 
     {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
             Err(_) => {
                 return HttpResponse::InternalServerError().json(serde_json::json!({
@@ -273,7 +258,7 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
         if let Ok(rows) = client
             .query(
                 "SELECT MAX(id) FROM bills WHERE data_group = $1",
-                &[&group_id],
+                &[&data_group],
             )
             .await
         {
@@ -364,15 +349,15 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
         match std::fs::write(&file_path, &final_file_data) {
             Ok(_) => {
                 let bill_id = next_bill_id;
-                let client = match pool.pool.get().await {
+                let client = match pool.get_client().await {
                     Ok(c) => c,
-                    Err(e) => {
+                    Err(_response) => {
                         let _ = std::fs::remove_file(&file_path);
                         results.push(UploadResult {
                             filename: final_filename.clone(),
                             bill_id: None,
                             success: false,
-                            error: Some(format!("Database error: {}", e)),
+                            error: Some("Database connection error".to_string()),
                         });
                         continue;
                     }
@@ -381,7 +366,7 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
                 let result = client
                     .query(
                         "INSERT INTO bills (id, data_group, filename) VALUES ($1, $2, $3) RETURNING id",
-                        &[&bill_id, &group_id, &final_filename],
+                        &[&bill_id, &data_group, &final_filename],
                     )
                     .await;
 
@@ -422,7 +407,7 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
 
     HttpResponse::Ok().json(serde_json::json!({
         "success": true,
-        "group_id": group_id,
+        "data_group": data_group,
         "total_files": results.len(),
         "success_count": success_count,
         "error_count": error_count,
@@ -446,25 +431,21 @@ pub async fn delete_bill(
     query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
     let id = path.into_inner();
-    let group_id = query
-        .get("group_id")
-        .and_then(|v| v.parse::<i32>().ok())
-        .unwrap_or(1);
+    let data_group = match get_data_group_url(&query) {
+        Ok(c) => c,
+        Err(response) => return response,
+    };
 
     let storage_path = {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
-            Err(e) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Database connection error: {}", e)
-                }));
-            }
+            Err(response) => return response,
         };
 
         match client
             .query_opt(
                 "SELECT bills_storage_path FROM data_groups WHERE id = $1",
-                &[&group_id],
+                &[&data_group],
             )
             .await
         {
@@ -474,19 +455,15 @@ pub async fn delete_bill(
     };
 
     let filename_to_delete: Option<String> = {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
-            Err(e) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Database connection error: {}", e)
-                }));
-            }
+            Err(response) => return response,
         };
 
         match client
             .query_opt(
                 "SELECT filename FROM bills WHERE id = $1 AND data_group = $2",
-                &[&id, &group_id],
+                &[&id, &data_group],
             )
             .await
         {
@@ -496,19 +473,15 @@ pub async fn delete_bill(
     };
 
     {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
-            Err(e) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Database connection error: {}", e)
-                }));
-            }
+            Err(response) => return response,
         };
 
         match client
             .execute(
                 "UPDATE expenses SET bill = NULL WHERE bill = $1 AND data_group = $2",
-                &[&id, &group_id],
+                &[&id, &data_group],
             )
             .await
         {
@@ -522,19 +495,15 @@ pub async fn delete_bill(
     }
 
     {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
-            Err(e) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Database connection error: {}", e)
-                }));
-            }
+            Err(response) => return response,
         };
 
         match client
             .execute(
                 "DELETE FROM bills WHERE id = $1 AND data_group = $2",
-                &[&id, &group_id],
+                &[&id, &data_group],
             )
             .await
         {
@@ -568,4 +537,3 @@ pub async fn delete_bill(
         "message": format!("Bill {} deleted successfully", id)
     }))
 }
-

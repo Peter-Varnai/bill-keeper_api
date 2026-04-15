@@ -1,7 +1,9 @@
-use actix_web::{get, web, HttpResponse, Responder};
 use crate::db::DbPool;
+use crate::helpers::get_data_group_url;
 use crate::models::ApplicationReport;
 use crate::services::calculate_summaries;
+use actix_web::{get, web, HttpResponse, Responder};
+use rust_decimal::Decimal;
 use std::collections::HashMap;
 
 #[get("/summaries")]
@@ -9,19 +11,15 @@ pub async fn get_summaries(
     pool: web::Data<DbPool>,
     query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
-    let group_id = query
-        .get("group_id")
-        .and_then(|v| v.parse::<i32>().ok())
-        .unwrap_or(1);
+    let data_group = match get_data_group_url(&query) {
+        Ok(c) => c,
+        Err(response) => return response,
+    };
 
     let application_reports: Vec<ApplicationReport> = {
-        let client = match pool.pool.get().await {
+        let client = match pool.get_client().await {
             Ok(c) => c,
-            Err(e) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Database connection error: {}", e)
-                }));
-            }
+            Err(response) => return response,
         };
 
         match client
@@ -29,7 +27,7 @@ pub async fn get_summaries(
                 "SELECT id, data_group, name, amount::text, created_at, submission_deadline 
                  FROM application_reports 
                  WHERE data_group = $1",
-                &[&group_id],
+                &[&data_group],
             )
             .await
         {
@@ -48,20 +46,16 @@ pub async fn get_summaries(
         }
     };
 
-    let client = match pool.pool.get().await {
+    let client = match pool.get_client().await {
         Ok(c) => c,
-        Err(e) => {
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": format!("Database connection error: {}", e)
-            }));
-        }
+        Err(response) => return response,
     };
 
     let result = client
         .query(
-            "SELECT id, data_group, date, partner, amount::text, expense_type, bill, application, is_cash 
+            "SELECT id, data_group, date, partner, amount, expense_type, bill, application, is_cash 
              FROM expenses WHERE data_group = $1",
-            &[&group_id],
+            &[&data_group],
         )
         .await;
 
@@ -73,7 +67,7 @@ pub async fn get_summaries(
                 data_group: row.get(1),
                 date: row.get(2),
                 partner: row.get(3),
-                amount: row.get::<_, String>(4).parse().unwrap_or(0.0),
+                amount: row.get::<_, Decimal>(4),
                 expense_type: row.get(5),
                 bill: row.get(6),
                 application: row.get(7),
@@ -86,3 +80,4 @@ pub async fn get_summaries(
     let summaries = calculate_summaries(&expenses, &application_reports);
     HttpResponse::Ok().json(summaries)
 }
+

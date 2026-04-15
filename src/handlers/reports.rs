@@ -1,6 +1,7 @@
-use actix_web::{get, web, HttpResponse, Responder};
 use crate::db::DbPool;
+use crate::helpers::get_data_group_url;
 use crate::models::BillToHtml;
+use actix_web::{get, web, HttpResponse, Responder};
 use std::collections::HashMap;
 
 #[get("/reports")]
@@ -8,10 +9,10 @@ pub async fn get_report(
     pool: web::Data<DbPool>,
     query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
-    let group_id = query
-        .get("group_id")
-        .and_then(|v| v.parse::<i32>().ok())
-        .unwrap_or(1);
+    let data_group = match get_data_group_url(&query) {
+        Ok(c) => c,
+        Err(response) => return response,
+    };
 
     let application_report_id = query
         .get("application_report_id")
@@ -19,13 +20,9 @@ pub async fn get_report(
 
     match application_report_id {
         Some(app_id) => {
-            let client = match pool.pool.get().await {
+            let client = match pool.get_client().await {
                 Ok(c) => c,
-                Err(e) => {
-                    return HttpResponse::InternalServerError().json(serde_json::json!({
-                        "error": format!("Database connection error: {}", e)
-                    }));
-                }
+                Err(response) => return response,
             };
 
             let result = client
@@ -33,7 +30,7 @@ pub async fn get_report(
                     "SELECT e.id, e.partner, e.amount::text, e.date, e.expense_type, e.bill, e.is_cash
                      FROM expenses e
                      WHERE e.application = $1 AND e.data_group = $2",
-                    &[&app_id, &group_id],
+                    &[&app_id, &data_group],
                 )
                 .await;
 
@@ -48,7 +45,7 @@ pub async fn get_report(
                             if let Ok(bill_rows) = client
                                 .query(
                                     "SELECT filename FROM bills WHERE id = $1 AND data_group = $2",
-                                    &[&bid, &group_id],
+                                    &[&bid, &data_group],
                                 )
                                 .await
                             {
