@@ -416,22 +416,6 @@ pub async fn bulk_import_expenses(
         //     }
         // };
 
-        if row.partner.trim().is_empty() {
-            errors.push(CsvImportError {
-                row: row.row_number,
-                reason: "Partner field is empty".to_string(),
-            });
-            continue;
-        }
-
-        let Some(date) = row.date else {
-            errors.push(CsvImportError {
-                row: row.row_number,
-                reason: format!("Invalid date format: {:?}", row.date),
-            });
-            continue;
-        };
-
         // let date = if row.date.trim().is_empty() {
         //     None
         // } else {
@@ -447,6 +431,21 @@ pub async fn bulk_import_expenses(
         //     }
         // };
 
+        if row.partner.trim().is_empty() {
+            errors.push(CsvImportError {
+                row: row.row_number,
+                reason: "Partner field is empty".to_string(),
+            });
+            continue;
+        }
+
+        let Some(date) = row.date else {
+            errors.push(CsvImportError {
+                row: row.row_number,
+                reason: format!("Invalid date format: {:?}", row.date),
+            });
+            continue;
+        };
         let exists = client
             .query_opt(
                 "SELECT id FROM expenses WHERE partner = $1 AND amount = $2 AND data_group = $3 LIMIT 1",

@@ -116,19 +116,13 @@ pub async fn get_bill(
     }
 }
 
-#[put("/bills/{id}")]
+use crate::models::requests::BillUpdateRequest;
+
+#[put("/bills")]
 pub async fn update_bill(
     pool: web::Data<DbPool>,
-    path: web::Path<i32>,
-    bill: web::Json<Bill>,
-    query: web::Query<HashMap<String, String>>,
+    bill: web::Json<BillUpdateRequest>,
 ) -> impl Responder {
-    let id = path.into_inner();
-    let data_group = match get_data_group_url(&query) {
-        Ok(c) => c,
-        Err(response) => return response,
-    };
-
     let client = match pool.get_client().await {
         Ok(c) => c,
         Err(response) => return response,
@@ -143,8 +137,8 @@ pub async fn update_bill(
                 &bill.amount,
                 &bill.date,
                 &bill.is_cash,
-                &id,
-                &data_group,
+                &bill.id,
+                &bill.data_group,
             ],
         )
         .await;
@@ -153,11 +147,11 @@ pub async fn update_bill(
         Ok(rows) => {
             if rows > 0 {
                 HttpResponse::Ok().json(serde_json::json!({
-                    "message": format!("Updated bill {}", id)
+                    "message": format!("Updated bill {}", bill.id)
                 }))
             } else {
                 HttpResponse::NotFound().json(serde_json::json!({
-                    "error": format!("Bill {} not found", id)
+                    "error": format!("Bill {} not found", bill.id)
                 }))
             }
         }
@@ -243,32 +237,6 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
     let base_path = format!("./public/{}", storage_path);
 
     let mut results: Vec<UploadResult> = Vec::new();
-    let mut next_bill_id: i32 = 1;
-
-    {
-        let client = match pool.get_client().await {
-            Ok(c) => c,
-            Err(_) => {
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": "Database connection error"
-                }));
-            }
-        };
-
-        if let Ok(rows) = client
-            .query(
-                "SELECT MAX(id) FROM bills WHERE data_group = $1",
-                &[&data_group],
-            )
-            .await
-        {
-            if let Some(row) = rows.first() {
-                if let Some(id) = row.get::<_, Option<i32>>(0) {
-                    next_bill_id = id + 1;
-                }
-            }
-        }
-    }
 
     for (filename, file_data) in files_to_process {
         if file_data.len() > MAX_FILE_SIZE {
@@ -348,7 +316,6 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
 
         match std::fs::write(&file_path, &final_file_data) {
             Ok(_) => {
-                let bill_id = next_bill_id;
                 let client = match pool.get_client().await {
                     Ok(c) => c,
                     Err(_response) => {
@@ -365,20 +332,20 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
 
                 let result = client
                     .query(
-                        "INSERT INTO bills (id, data_group, filename) VALUES ($1, $2, $3) RETURNING id",
-                        &[&bill_id, &data_group, &final_filename],
+                        "INSERT INTO bills (data_group, filename) VALUES ($1, $2) RETURNING id",
+                        &[&data_group, &final_filename],
                     )
                     .await;
 
                 match result {
-                    Ok(_) => {
+                    Ok(rows) => {
+                        let bill_id: i32 = rows.first().map(|r| r.get(0)).unwrap_or(0);
                         results.push(UploadResult {
                             filename: final_filename.clone(),
                             bill_id: Some(bill_id),
                             success: true,
                             error: None,
                         });
-                        next_bill_id += 1;
                     }
                     Err(e) => {
                         let _ = std::fs::remove_file(&file_path);

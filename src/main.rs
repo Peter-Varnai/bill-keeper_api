@@ -76,3 +76,10 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
+//TODO: 1: Postgres user data isolation, make sure the user can not access other users data buy simply
+//changing the stored data_group value in the local storage.
+//
+//2: at the moment, uploaded bills are identified by their uniqe index that auto
+//   inceremnts, when viewing the uploaded bills of a datagroup, the list is identifying the bills
+//   by their index, it can happen that in a fresh data_group the identifier of their first
+//   uploaded bill is no. 219

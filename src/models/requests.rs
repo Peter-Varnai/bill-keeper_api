@@ -57,3 +57,13 @@ pub struct BillNumberUpdate {
     pub expense_id: i32,
     pub new_number: i32,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct BillUpdateRequest {
+    pub id: i32,
+    pub amount: Option<Decimal>,
+    pub filename: String,
+    pub date: Option<NaiveDate>,
+    pub is_cash: Option<bool>,
+    pub data_group: i32,
+}
