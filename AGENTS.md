@@ -156,3 +156,18 @@ src/
 ```bash
 cargo test test_name_here
 ```
+
+### Running E2E Tests
+```bash
+cargo test --test e2e
+```
+
+E2E tests require:
+- PostgreSQL running with credentials in `.env.test` file
+- The test will:
+  1. Connect to `bill_keeper_testing` database as `bill_keeper_testing` user
+  2. DROP and CREATE tables from `schema.sql`
+  3. INSERT seed data from `seed_data.sql`
+  4. Spawn the API server binary on port 8090 (with TESTING=true)
+  5. Run e2e tests for GET /api/expenses endpoint
+  6. Tear down: DROP tables and kill server

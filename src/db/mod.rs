@@ -56,28 +56,6 @@ impl DbPool {
         Ok(DbPool { pool })
     }
 
-    // pub async fn get_data_group(
-    //     &self,
-    //     group_id: i32,
-    // ) -> Result<DataGroup, Box<dyn std::error::Error>> {
-    //     let client = self.pool.get().await?;
-    //     let row = client
-    //         .query_one(
-    //             "SELECT id, name, type, created_at, bills_storage_path
-    //              FROM data_groups WHERE id = $1",
-    //             &[&group_id],
-    //         )
-    //         .await?;
-    //
-    //     Ok(DataGroup {
-    //         id: row.get(0),
-    //         name: row.get(1),
-    //         group_type: row.get(2),
-    //         created_at: row.get(3),
-    //         bills_storage_path: row.get(4),
-    //     })
-    // }
-
     pub async fn get_client(&self) -> Result<deadpool_postgres::Object, HttpResponse> {
         self.pool.get().await.map_err(|e| {
             HttpResponse::InternalServerError().json(serde_json::json!({
@@ -87,12 +65,11 @@ impl DbPool {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct DataGroup {
-    pub id: i32,
-    pub name: String,
-    pub group_type: String,
-    pub created_at: String,
-    pub bills_storage_path: String,
-}
-
+// #[derive(Debug, Clone)]
+// pub struct DataGroup {
+//     pub id: i32,
+//     pub name: String,
+//     pub group_type: String,
+//     pub created_at: String,
+//     pub bills_storage_path: String,
+// }

@@ -6,6 +6,7 @@
 /db_migrate
 
 .env
+.env.test
 .env.local
 .env.*.local
 

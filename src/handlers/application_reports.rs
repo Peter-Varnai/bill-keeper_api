@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use crate::db::DbPool;
-use crate::helpers::{get_data_group_req, parse_date_or_panic};
+use crate::helpers::get_data_group_req;
 use crate::models::{ApplicationReport, CreateApplicationReportRequest};
 use actix_web::{delete, get, patch, post, web, HttpResponse, Responder};
 use chrono::NaiveDate;

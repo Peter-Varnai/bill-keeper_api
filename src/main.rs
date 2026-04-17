@@ -1,8 +1,8 @@
 use actix_cors::Cors;
 use actix_web::{http, web, App, HttpServer};
-use dotenv::dotenv;
 use log::info;
 use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger};
+use std::env;
 use std::fs::OpenOptions;
 
 mod db;
@@ -18,7 +18,11 @@ use middleware::logging::RequestLogger;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenv().ok();
+    let testing = env::var("TESTING") == Ok("true".to_string());
+    #[cfg(debug_assertions)]
+    if !testing {
+        dotenv::from_filename(".env").ok();
+    }
 
     std::fs::create_dir_all("logs").unwrap_or_else(|e| {
         eprintln!("Failed to create logs directory: {}", e);
@@ -71,7 +75,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(db_pool.clone())
             .configure(routes::config)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("127.0.0.1", env::var("PORT").unwrap_or_else(|_| "8080".to_string()).parse().unwrap()))?
     .run()
     .await
 }

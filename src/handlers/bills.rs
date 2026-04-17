@@ -1,5 +1,5 @@
 use crate::db::DbPool;
-use crate::helpers::get_data_group_url;
+use crate::helpers::{get_data_group_url, sanitize_filename};
 use crate::models::Bill;
 use crate::services::pdf_converter;
 use actix_multipart::Multipart;
@@ -380,15 +380,6 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
         "error_count": error_count,
         "results": results,
     }))
-}
-
-fn sanitize_filename(filename: &str) -> String {
-    let filename = filename.split(&['/', '\\'][..]).last().unwrap_or(filename);
-    filename
-        .replace("..", "_")
-        .replace(' ', "_")
-        .replace('\n', "")
-        .replace('\r', "")
 }
 
 #[delete("/bills/{id}")]
