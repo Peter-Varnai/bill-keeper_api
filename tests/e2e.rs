@@ -1,10 +1,9 @@
 mod src;
 
 #[tokio::test]
-async fn test_get_expenses() {
+async fn test_expenses_crud_flow() {
     src::config::load_env();
-    src::handlers::expenses::test_get_expenses().await;
+    src::handlers::expenses::test_expenses_crud_flow()
+        .await
+        .expect("test failed");
 }
-
-// TODO: IMPLEMENT A NEW ERROR TYOE FOR TESTS ALONE, THE BOXING METHOD LOOKS HORRIBLE!!!
-

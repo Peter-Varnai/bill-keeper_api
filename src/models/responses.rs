@@ -16,12 +16,14 @@ pub struct EarTotals {
     pub cash_total: String,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Debug, Clone)]
 pub struct Report {
     pub name: String,
     pub bills: Vec<super::entities::BillToHtml>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 pub struct CsvImportResult {
     pub inserted: usize,
@@ -31,6 +33,7 @@ pub struct CsvImportResult {
     pub total_processed: usize,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 pub struct CsvImportError {
     pub row: usize,

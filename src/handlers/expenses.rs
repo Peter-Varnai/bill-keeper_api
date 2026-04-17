@@ -3,7 +3,6 @@ use crate::helpers::{get_data_group_req, get_data_group_url};
 use crate::models::{BillNumberUpdate, CreateExpenseRequest, CsvImportRequest, Expense};
 use actix_web::{delete, get, patch, post, web, HttpResponse, Responder};
 use rust_decimal::Decimal;
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -295,42 +294,6 @@ pub async fn create_expense(
     }
 }
 
-// fn normalize_amount(value: &str) -> Option<f64> {
-//     let clean = value.trim();
-//     if clean.is_empty() {
-//         return None;
-//     }
-//
-//     let last_comma = clean.rfind(',');
-//     let last_dot = clean.rfind('.');
-//
-//     let result = match (last_comma, last_dot) {
-//         (Some(comma_pos), Some(dot_pos)) => {
-//             if comma_pos > dot_pos {
-//                 clean.replace(".", "").replace(",", ".")
-//             } else {
-//                 clean.replace(",", "")
-//             }
-//         }
-//         (Some(_), None) => {
-//             if let Some(comma_pos) = last_comma {
-//                 let after_comma = clean.len() - comma_pos - 1;
-//                 if after_comma <= 2 {
-//                     clean.replace(",", ".")
-//                 } else {
-//                     clean.replace(",", "")
-//                 }
-//             } else {
-//                 clean.to_string()
-//             }
-//         }
-//         (None, Some(_)) => clean.to_string(),
-//         (None, None) => clean.to_string(),
-//     };
-//
-//     result.parse::<f64>().ok()
-// }
-
 #[derive(serde::Serialize)]
 pub struct CsvImportResult {
     inserted: usize,
@@ -344,35 +307,6 @@ pub struct CsvImportResult {
 pub struct CsvImportError {
     row: usize,
     reason: String,
-}
-
-fn parse_date(date_str: &str, format: &str) -> Option<String> {
-    use chrono::NaiveDate;
-
-    let date_str = date_str.trim();
-    if date_str.is_empty() {
-        return None;
-    }
-
-    let formats = if format == "auto-detect" {
-        vec!["%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"]
-    } else {
-        match format {
-            "DD.MM.YYYY" => vec!["%d.%m.%Y"],
-            "YYYY-MM-DD" => vec!["%Y-%m-%d"],
-            "DD/MM/YYYY" => vec!["%d/%m/%Y"],
-            "MM/DD/YYYY" => vec!["%m/%d/%Y"],
-            _ => vec!["%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"],
-        }
-    };
-
-    for fmt in formats {
-        if let Ok(date) = NaiveDate::parse_from_str(date_str, fmt) {
-            return Some(date.format("%Y-%m-%d").to_string());
-        }
-    }
-
-    None
 }
 
 #[post("/expenses/bulk")]

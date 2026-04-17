@@ -4,8 +4,7 @@ use crate::db::DbPool;
 use crate::helpers::get_data_group_req;
 use crate::models::{ApplicationReport, CreateApplicationReportRequest};
 use actix_web::{delete, get, patch, post, web, HttpResponse, Responder};
-use chrono::NaiveDate;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct GetApplicationReportsQuery {
@@ -16,16 +15,6 @@ pub struct GetApplicationReportsQuery {
 pub struct UpdateApplicationReportRequest {
     name: Option<String>,
     amount: Option<f64>,
-    submission_deadline: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct ApplicationReportResponse {
-    id: i32,
-    data_group: i32,
-    name: String,
-    amount: f64,
-    created_at: String,
     submission_deadline: Option<String>,
 }
 

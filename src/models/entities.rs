@@ -34,6 +34,7 @@ pub struct ApplicationReport {
     pub submission_deadline: Option<chrono::NaiveDate>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DataGroup {
     pub id: i32,

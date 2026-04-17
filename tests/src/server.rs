@@ -1,8 +1,9 @@
 use std::process::{Child, Command, Stdio};
 
 use super::config::{BINARY_PATH, TEST_PORT};
+use super::error::TestError;
 
-pub fn start() -> Result<Child, Box<dyn std::error::Error>> {
+pub fn start() -> Result<Child, TestError> {
     let child = Command::new(BINARY_PATH)
         .env_clear()
         .env("TESTING", "true")
@@ -15,9 +16,11 @@ pub fn start() -> Result<Child, Box<dyn std::error::Error>> {
             "POSTGRES_PASSWORD",
             std::env::var("POSTGRES_PASSWORD").unwrap(),
         )
+        .current_dir("/home/peter/projects/bill_keeper/api-service")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .spawn()?;
+        .spawn()
+        .map_err(TestError::Io)?;
 
     Ok(child)
 }

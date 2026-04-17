@@ -90,7 +90,6 @@ pub async fn handler(
 - One handler per file in `src/handlers/`
 - Use query parameters for filtering (e.g., `?data_group=1`)
 - Return JSON responses using `.json()`
-- Use PATCH for partial updates, PUT for full updates
 
 ### Database Queries
 - Use parameterized queries to prevent SQL injection
@@ -161,6 +160,9 @@ cargo test test_name_here
 ```bash
 cargo test --test e2e
 ```
+
+When working on E2E tests, always use and or expand the TestError struct in tests/error.rs.
+When working on the E2E tests, always check the models the backend is expecting to receive and the model the frontend is sending back. The root directory of the frontend can be found in /home/peter/projects/bill_keeper/frontend/
 
 E2E tests require:
 - PostgreSQL running with credentials in `.env.test` file

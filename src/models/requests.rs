@@ -4,6 +4,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct CreateDataGroupRequest {
     pub name: String,
@@ -22,8 +23,10 @@ pub struct CreateExpenseRequest {
     pub data_group: Option<i32>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct CsvImportRequest {
+    #[allow(dead_code)]
     pub date_format: String,
     pub rows: Vec<CsvRow>,
     pub data_group: Option<i32>,
@@ -45,6 +48,7 @@ pub struct CreateApplicationReportRequest {
     pub data_group: i32,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct UpdateApplicationReportRequest {
     pub name: Option<String>,
@@ -52,8 +56,10 @@ pub struct UpdateApplicationReportRequest {
     pub submission_deadline: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct BillNumberUpdate {
+    #[allow(dead_code)]
     pub expense_id: i32,
     pub new_number: i32,
 }

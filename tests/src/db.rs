@@ -1,41 +1,54 @@
 use tokio_postgres::Client;
 
 use super::config::db_config;
+use super::error::TestError;
 
-const tables: &[&str] = &["expenses", "bills", "application_reports", "data_groups"];
+const TABLES: &[&str] = &["expenses", "bills", "application_reports", "data_groups"];
 
-pub async fn drop_tables(client: &Client) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    for table in tables {
+pub async fn drop_tables(client: &Client) -> Result<(), TestError> {
+    for table in TABLES {
         client
             .execute(&format!("DROP TABLE IF EXISTS {}", table), &[])
-            .await?;
+            .await
+            .map_err(TestError::Query)?;
     }
     Ok(())
 }
 
-pub async fn setup() -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
-    let config = db_config().parse::<tokio_postgres::Config>()?;
-    let (client, connection) = config.connect(tokio_postgres::NoTls).await?;
+pub async fn setup() -> Result<Client, TestError> {
+    let config = db_config()
+        .parse::<tokio_postgres::Config>()
+        .map_err(|_| TestError::ConfigParse)?;
+
+    let (client, connection) = config
+        .connect(tokio_postgres::NoTls)
+        .await
+        .map_err(TestError::Connect)?;
     tokio::spawn(connection);
 
     drop_tables(&client).await?;
 
-    let schema = std::fs::read_to_string("schema.sql")?;
-    client.simple_query(&schema).await?;
+    let schema = std::fs::read_to_string("schema.sql").map_err(TestError::Io)?;
+    client.simple_query(&schema).await.map_err(TestError::Query)?;
 
-    let seed = std::fs::read_to_string("seed_data.sql")?;
-    client.simple_query(&seed).await?;
+    let seed = std::fs::read_to_string("seed_data.sql").map_err(TestError::Io)?;
+    client.simple_query(&seed).await.map_err(TestError::Query)?;
 
     Ok(client)
 }
 
-pub async fn teardown() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let config = db_config().parse::<tokio_postgres::Config>()?;
-    let (client, connection) = config.connect(tokio_postgres::NoTls).await?;
+pub async fn teardown() -> Result<(), TestError> {
+    let config = db_config()
+        .parse::<tokio_postgres::Config>()
+        .map_err(|_| TestError::ConfigParse)?;
+
+    let (client, connection) = config
+        .connect(tokio_postgres::NoTls)
+        .await
+        .map_err(TestError::Connect)?;
     tokio::spawn(connection);
 
     drop_tables(&client).await?;
 
     Ok(())
 }
-
