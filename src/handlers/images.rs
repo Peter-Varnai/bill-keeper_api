@@ -60,4 +60,3 @@ pub async fn get_image(
         HttpResponse::NotFound().body("File not found")
     }
 }
-

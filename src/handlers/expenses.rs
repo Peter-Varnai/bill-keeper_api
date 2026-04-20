@@ -330,41 +330,6 @@ pub async fn bulk_import_expenses(
     let mut errors = Vec::new();
 
     for row in &data.rows {
-        // let amount = match normalize_amount(&row.amount) {
-        //     Some(a) => a,
-        //     None => {
-        //         errors.push(CsvImportError {
-        //             row: row.row_number,
-        //             reason: format!("Invalid amount format: {}", row.amount),
-        //         });
-        //         continue;
-        //     }
-        // };
-
-        // let amount = match Decimal::from_str(&row.amount) {
-        //     Ok(val) => val,
-        //     Err(e) => {
-        //         return HttpResponse::InternalServerError().json(serde_json::json!({
-        //             "error": format!("Error converting expense amount value: {}", e)
-        //         }));
-        //     }
-        // };
-
-        // let date = if row.date.trim().is_empty() {
-        //     None
-        // } else {
-        //     match parse_date(&row.date, &data.date_format) {
-        //         Some(d) => Some(d),
-        //         None => {
-        //             errors.push(CsvImportError {
-        //                 row: row.row_number,
-        //                 reason: format!("Invalid date format: {}", row.date),
-        //             });
-        //             continue;
-        //         }
-        //     }
-        // };
-
         if row.partner.trim().is_empty() {
             errors.push(CsvImportError {
                 row: row.row_number,

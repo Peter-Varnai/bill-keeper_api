@@ -61,4 +61,3 @@ pub async fn get_ear(
 
     HttpResponse::Ok().json(EarResponse { expenses, totals })
 }
-

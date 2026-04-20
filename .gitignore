@@ -11,5 +11,6 @@
 .env.*.local
 
 *.log
+/tests/test_docs/*
 
 public/*.db

@@ -13,9 +13,9 @@ ON CONFLICT (name) DO NOTHING;
 
 -- Sample bills
 INSERT INTO bills (data_group, filename, amount, date, is_cash) VALUES
-(1, 'test_invoice_1.pdf', 100.00, '2024-01-15', false),
-(1, 'test_cash_receipt.pdf', 25.50, '2024-01-20', true),
-(2, 'test_invoice_2.pdf', 200.00, '2025-02-01', false)
+(1, 'test_invoice_1.jpg', 100.00, '2024-01-15', false),
+(1, 'test_cash_receipt.jpg', 25.50, '2024-01-20', true),
+(2, 'test_invoice_2.jpg', 200.00, '2025-02-01', false)
 ON CONFLICT DO NOTHING;
 
 -- Sample application reports

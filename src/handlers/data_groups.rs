@@ -1,6 +1,6 @@
+use crate::db::DbPool;
 use actix_web::{get, post, web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
-use crate::db::DbPool;
 use std::fs;
 
 #[derive(Serialize)]

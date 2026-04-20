@@ -3,10 +3,10 @@ use tokio_postgres::Client;
 use super::config::db_config;
 use super::error::TestError;
 
-const TABLES: &[&str] = &["expenses", "bills", "application_reports", "data_groups"];
+const TABLES_IN_ORDER: &[&str] = &["expenses", "bills", "application_reports", "data_groups"];
 
 pub async fn drop_tables(client: &Client) -> Result<(), TestError> {
-    for table in TABLES {
+    for table in TABLES_IN_ORDER {
         client
             .execute(&format!("DROP TABLE IF EXISTS {}", table), &[])
             .await
@@ -29,7 +29,10 @@ pub async fn setup() -> Result<Client, TestError> {
     drop_tables(&client).await?;
 
     let schema = std::fs::read_to_string("schema.sql").map_err(TestError::Io)?;
-    client.simple_query(&schema).await.map_err(TestError::Query)?;
+    client
+        .simple_query(&schema)
+        .await
+        .map_err(TestError::Query)?;
 
     let seed = std::fs::read_to_string("seed_data.sql").map_err(TestError::Io)?;
     client.simple_query(&seed).await.map_err(TestError::Query)?;

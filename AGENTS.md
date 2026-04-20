@@ -4,6 +4,12 @@ This file provides guidelines for agents operating in this repository.
 
 ## Build / Lint / Test Commands
 
+### Development Environment
+**Always enter the nix dev shell first:**
+```bash
+nix develop
+```
+
 ### Build & Run
 ```bash
 cargo build          # Build the project
@@ -158,8 +164,10 @@ cargo test test_name_here
 
 ### Running E2E Tests
 ```bash
-cargo test --test e2e
+cargo test --test e2e -- --test-threads=1
 ```
+
+**Important:** Tests MUST run sequentially due to shared database state. Running with multiple threads will cause PostgreSQL catalog conflicts.
 
 When working on E2E tests, always use and or expand the TestError struct in tests/error.rs.
 When working on the E2E tests, always check the models the backend is expecting to receive and the model the frontend is sending back. The root directory of the frontend can be found in /home/peter/projects/bill_keeper/frontend/

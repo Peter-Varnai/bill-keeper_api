@@ -24,7 +24,7 @@
             pkg-config
             cmake
             rustup
-            openssl
+            openssl.dev
             poppler-utils
           ];
 

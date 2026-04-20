@@ -38,7 +38,10 @@ CREATE TABLE IF NOT EXISTS expenses (
     partner TEXT NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
     expense_type INTEGER NOT NULL DEFAULT 0,
-    bill INTEGER NOT NULL DEFAULT 0 REFERENCES bills(id),
+    bill INTEGER DEFAULT 0 REFERENCES bills(id),
     application INTEGER REFERENCES application_reports(id),
     is_cash BOOLEAN DEFAULT false
 );
+
+INSERT INTO data_groups (id, name, type, created_at, bills_storage_path)
+VALUES (0, '2026', 'organization', '2026-01-01 00:00:00', 'pdf_imgs/2025');

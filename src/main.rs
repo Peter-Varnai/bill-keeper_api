@@ -75,7 +75,13 @@ async fn main() -> std::io::Result<()> {
             .app_data(db_pool.clone())
             .configure(routes::config)
     })
-    .bind(("127.0.0.1", env::var("PORT").unwrap_or_else(|_| "8080".to_string()).parse().unwrap()))?
+    .bind((
+        "127.0.0.1",
+        env::var("PORT")
+            .unwrap_or_else(|_| "8080".to_string())
+            .parse()
+            .unwrap(),
+    ))?
     .run()
     .await
 }

@@ -80,4 +80,3 @@ pub async fn get_summaries(
     let summaries = calculate_summaries(&expenses, &application_reports);
     HttpResponse::Ok().json(summaries)
 }
-
