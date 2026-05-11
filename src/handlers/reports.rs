@@ -1,6 +1,7 @@
 use crate::db::DbPool;
 use crate::helpers::get_data_group_url;
-use crate::models::BillToHtml;
+use crate::models::{BillToHtml, BelegaufstellungItem};
+use crate::services::get_expense_type_name;
 use actix_web::{get, web, HttpResponse, Responder};
 use std::collections::HashMap;
 
@@ -27,50 +28,51 @@ pub async fn get_report(
 
             let result = client
                 .query(
-                    "SELECT e.id, e.partner, e.amount::text, e.date, e.expense_type, e.bill, e.is_cash
+                    "SELECT e.id, e.partner, e.amount, e.date, e.expense_type, e.bill, e.is_cash
                      FROM expenses e
                      WHERE e.application = $1 AND e.data_group = $2",
                     &[&app_id, &data_group],
                 )
                 .await;
 
-            let bills: Vec<BillToHtml> = match result {
+            let items: Vec<BelegaufstellungItem> = match result {
                 Ok(rows) => {
-                    let mut result_bills = Vec::new();
+                    let mut result_items = Vec::new();
                     for row in rows {
                         let bill_id: Option<i32> = row.get(5);
-                        let mut filename = String::new();
+                        let mut bill_date: Option<chrono::NaiveDate> = None;
 
                         if let Some(bid) = bill_id {
                             if let Ok(bill_rows) = client
                                 .query(
-                                    "SELECT filename FROM bills WHERE id = $1 AND data_group = $2",
+                                    "SELECT date FROM bills WHERE id = $1 AND data_group = $2",
                                     &[&bid, &data_group],
                                 )
                                 .await
                             {
                                 if let Some(bill_row) = bill_rows.first() {
-                                    filename = bill_row.get::<_, String>(0);
+                                    bill_date = bill_row.get(0);
                                 }
                             }
                         }
 
-                        result_bills.push(BillToHtml {
+                        let expense_type: i32 = row.get(4);
+                        result_items.push(BelegaufstellungItem {
                             expense_id: row.get(0),
                             partner: row.get(1),
                             amount: row.get(2),
                             date: row.get(3),
-                            expense_type: row.get(4),
-                            filename,
+                            expense_type_name: get_expense_type_name(expense_type),
                             is_cash: row.get(6),
+                            bill_date,
                         });
                     }
-                    result_bills
+                    result_items
                 }
                 _ => vec![],
             };
 
-            HttpResponse::Ok().json(bills)
+            HttpResponse::Ok().json(items)
         }
         None => HttpResponse::BadRequest().json(serde_json::json!({
             "error": "application_report_id is required"

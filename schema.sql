@@ -43,5 +43,16 @@ CREATE TABLE IF NOT EXISTS expenses (
     is_cash BOOLEAN DEFAULT false
 );
 
+-- Utility Data table (bank_stand, cash_stand)
+CREATE TABLE IF NOT EXISTS utility_data (
+    id SERIAL PRIMARY KEY,
+    data_group INTEGER NOT NULL REFERENCES data_groups(id),
+    key TEXT NOT NULL,
+    value NUMERIC(12,2),
+    created_at VARCHAR(50) DEFAULT now(),
+    updated_at VARCHAR(50) DEFAULT now(),
+    UNIQUE(data_group, key)
+);
+
 INSERT INTO data_groups (id, name, type, created_at, bills_storage_path)
 VALUES (0, '2026', 'organization', '2026-01-01 00:00:00', 'pdf_imgs/2025');

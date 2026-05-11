@@ -48,9 +48,20 @@ pub struct DataGroup {
 pub struct BillToHtml {
     pub expense_id: i32,
     pub partner: String,
-    pub amount: String,
-    pub date: Option<String>,
+    pub amount: Decimal,
+    pub date: Option<chrono::NaiveDate>,
     pub expense_type: i32,
     pub filename: String,
     pub is_cash: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BelegaufstellungItem {
+    pub expense_id: i32,
+    pub partner: String,
+    pub amount: Decimal,
+    pub date: Option<chrono::NaiveDate>,
+    pub expense_type_name: String,
+    pub is_cash: Option<bool>,
+    pub bill_date: Option<chrono::NaiveDate>,
 }

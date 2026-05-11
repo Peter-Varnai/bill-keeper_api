@@ -6,3 +6,4 @@ pub mod expenses;
 pub mod images;
 pub mod reports;
 pub mod summaries;
+pub mod utild;

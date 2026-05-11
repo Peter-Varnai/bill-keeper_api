@@ -49,6 +49,8 @@ pub fn calculate_summaries(
         });
     }
 
+    dbg!(&summaries);
+
     summaries
 }
 

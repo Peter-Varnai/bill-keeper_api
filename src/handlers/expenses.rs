@@ -345,28 +345,30 @@ pub async fn bulk_import_expenses(
             });
             continue;
         };
-        let exists = client
-            .query_opt(
-                "SELECT id FROM expenses WHERE partner = $1 AND amount = $2 AND data_group = $3 LIMIT 1",
-                &[&row.partner, &row.amount, &data_group],
-            )
-            .await;
 
-        match exists {
-            Ok(Some(_)) => {
-                duplicates_found += 1;
-                duplicates_skipped += 1;
-                continue;
-            }
-            Ok(None) => {}
-            Err(e) => {
-                errors.push(CsvImportError {
-                    row: row.row_number,
-                    reason: format!("Database error checking duplicate: {}", e),
-                });
-                continue;
-            }
-        }
+        // Duplicate check disabled - import all rows
+        // let exists = client
+        //     .query_opt(
+        //         "SELECT id FROM expenses WHERE partner = $1 AND amount = $2 AND date = $3 AND data_group = $4 LIMIT 1",
+        //         &[&row.partner, &row.amount, &date, &data_group],
+        //     )
+        //     .await;
+
+        // match exists {
+        //     Ok(Some(_)) => {
+        //         duplicates_found += 1;
+        //         duplicates_skipped += 1;
+        //         continue;
+        //     }
+        //     Ok(None) => {}
+        //     Err(e) => {
+        //         errors.push(CsvImportError {
+        //             row: row.row_number,
+        //             reason: format!("Database error checking duplicate: {}", e),
+        //         });
+        //         continue;
+        //     }
+        // }
 
         let result = client
             .query(
@@ -378,8 +380,8 @@ pub async fn bulk_import_expenses(
                     &row.partner.trim(),
                     &row.amount,
                     &0,
-                    &Option::<i32>::None,
-                    &Option::<i32>::None,
+                    &Some(0),
+                    &Some(0),
                     &false,
                 ],
             )

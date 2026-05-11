@@ -22,9 +22,12 @@ pub fn config(cfg: &mut web::ServiceConfig) {
             .service(crate::handlers::images::get_image)
             .service(crate::handlers::data_groups::get_data_groups)
             .service(crate::handlers::data_groups::create_data_group)
+            .service(crate::handlers::data_groups::delete_data_group)
             .service(crate::handlers::application_reports::get_application_reports)
             .service(crate::handlers::application_reports::create_application_report)
             .service(crate::handlers::application_reports::update_application_report)
-            .service(crate::handlers::application_reports::delete_application_report),
+            .service(crate::handlers::application_reports::delete_application_report)
+            .service(crate::handlers::utild::get_utild)
+            .service(crate::handlers::utild::update_utild),
     );
 }
