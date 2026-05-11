@@ -64,4 +64,5 @@ pub struct BelegaufstellungItem {
     pub expense_type_name: String,
     pub is_cash: Option<bool>,
     pub bill_date: Option<chrono::NaiveDate>,
+    pub bill_filename: Option<String>,
 }

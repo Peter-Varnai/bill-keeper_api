@@ -41,17 +41,19 @@ pub async fn get_report(
                     for row in rows {
                         let bill_id: Option<i32> = row.get(5);
                         let mut bill_date: Option<chrono::NaiveDate> = None;
+                        let mut bill_filename: Option<String> = None;
 
                         if let Some(bid) = bill_id {
                             if let Ok(bill_rows) = client
                                 .query(
-                                    "SELECT date FROM bills WHERE id = $1 AND data_group = $2",
+                                    "SELECT date, filename FROM bills WHERE id = $1 AND data_group = $2",
                                     &[&bid, &data_group],
                                 )
                                 .await
                             {
                                 if let Some(bill_row) = bill_rows.first() {
                                     bill_date = bill_row.get(0);
+                                    bill_filename = bill_row.get(1);
                                 }
                             }
                         }
@@ -65,6 +67,7 @@ pub async fn get_report(
                             expense_type_name: get_expense_type_name(expense_type),
                             is_cash: row.get(6),
                             bill_date,
+                            bill_filename,
                         });
                     }
                     result_items
