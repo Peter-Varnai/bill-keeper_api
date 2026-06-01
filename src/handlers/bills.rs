@@ -1,7 +1,7 @@
 use crate::db::DbPool;
 use crate::helpers::{get_data_group_url, sanitize_filename};
 use crate::models::Bill;
-use crate::services::pdf_converter;
+use crate::services::{image_processor, pdf_converter};
 use actix_multipart::Multipart;
 use actix_web::{delete, get, post, put, web, HttpResponse, Responder};
 use futures_util::TryStreamExt;
@@ -291,6 +291,26 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
             final_filename = filename.clone();
             final_file_data = file_data.clone();
         }
+
+        let final_file_data = match image_processor::compress_and_resize(&final_file_data, 1920, 85) {
+            Ok(compressed) => {
+                log::info!(
+                    "Compressed '{}': {} bytes -> {} bytes",
+                    final_filename,
+                    final_file_data.len(),
+                    compressed.len()
+                );
+                compressed
+            }
+            Err(e) => {
+                log::warn!(
+                    "Image compression failed for '{}': {}, keeping original",
+                    final_filename,
+                    e
+                );
+                final_file_data
+            }
+        };
 
         let file_path = format!("{}/{}", base_path, final_filename);
 

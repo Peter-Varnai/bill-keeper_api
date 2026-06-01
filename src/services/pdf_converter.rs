@@ -1,12 +1,11 @@
-use image::ImageFormat;
-use std::io::Cursor;
+use image::codecs::jpeg::JpegEncoder;
 
 const DEFAULT_DPI: u32 = 150;
 
 pub fn convert_pdf_to_jpg(
     pdf_data: &[u8],
     dpi: u32,
-    _quality: u8,
+    quality: u8,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
     let temp_dir = std::env::temp_dir();
     let temp_pdf = temp_dir.join("temp_upload.pdf");
@@ -25,9 +24,8 @@ pub fn convert_pdf_to_jpg(
 
     if let Some(first_page) = pages.into_iter().next() {
         let mut jpg_data = Vec::new();
-        let mut cursor = Cursor::new(&mut jpg_data);
-
-        first_page.write_to(&mut cursor, ImageFormat::Jpeg)?;
+        let mut encoder = JpegEncoder::new_with_quality(&mut jpg_data, quality);
+        encoder.encode_image(&first_page)?;
 
         let _ = std::fs::remove_file(temp_pdf);
 
@@ -41,7 +39,7 @@ pub fn convert_pdf_to_jpg(
 pub fn convert_pdf_to_jpg_with_defaults(
     pdf_data: &[u8],
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
-    convert_pdf_to_jpg(pdf_data, DEFAULT_DPI, 95)
+    convert_pdf_to_jpg(pdf_data, DEFAULT_DPI, 85)
 }
 
 pub fn should_convert_to_jpg(filename: &str) -> bool {

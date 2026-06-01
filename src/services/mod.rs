@@ -1,6 +1,7 @@
 use crate::models::{ApplicationReport, EarTotals, Expense, Summary};
 use std::collections::HashMap;
 
+pub mod image_processor;
 pub mod pdf_converter;
 
 pub fn calculate_summaries(

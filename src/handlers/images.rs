@@ -1,5 +1,6 @@
 use crate::db::DbPool;
 use crate::helpers::get_data_group_url;
+use crate::services::image_processor;
 use actix_web::{get, web, HttpResponse, Responder};
 use std::collections::HashMap;
 use std::path::Path;
@@ -44,6 +45,27 @@ pub async fn get_image(
     if Path::new(&file_path).exists() {
         match std::fs::read(&file_path) {
             Ok(data) => {
+                if !image_processor::is_already_compressed(&data, 1920) {
+                    match image_processor::compress_and_resize(&data, 1920, 85) {
+                        Ok(compressed) => {
+                            if compressed.len() < data.len() {
+                                log::info!(
+                                    "Compressing existing image '{}': {} bytes -> {} bytes",
+                                    filename,
+                                    data.len(),
+                                    compressed.len()
+                                );
+                                let _ = std::fs::write(&file_path, &compressed);
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!("Image compression failed for '{}': {}", filename, e);
+                        }
+                    }
+                }
+
+                let data = std::fs::read(&file_path).unwrap_or(data);
+
                 let content_type = if filename.ends_with(".png") {
                     "image/png"
                 } else if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
