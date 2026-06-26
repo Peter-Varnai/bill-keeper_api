@@ -1,9 +1,10 @@
+use crate::auth::get_user_id;
 use crate::db::DbPool;
-use crate::helpers::{get_data_group_url, sanitize_filename};
+use crate::helpers::{get_data_group_url, sanitize_filename, verify_data_group_ownership};
 use crate::models::Bill;
 use crate::services::{image_processor, pdf_converter};
 use actix_multipart::Multipart;
-use actix_web::{delete, get, post, put, web, HttpResponse, Responder};
+use actix_web::{delete, get, post, put, web, HttpRequest, HttpResponse, Responder};
 use futures_util::TryStreamExt;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -23,11 +24,21 @@ struct UploadResult {
 pub async fn get_bills(
     pool: web::Data<DbPool>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let data_group = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     let client = match pool.get_client().await {
         Ok(c) => c,
@@ -71,12 +82,22 @@ pub async fn get_bill(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let id = path.into_inner();
     let data_group = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     let client = match pool.get_client().await {
         Ok(c) => c,
@@ -122,7 +143,17 @@ use crate::models::requests::BillUpdateRequest;
 pub async fn update_bill(
     pool: web::Data<DbPool>,
     bill: web::Json<BillUpdateRequest>,
+    req: HttpRequest,
 ) -> impl Responder {
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, bill.data_group, user_id).await {
+        return response;
+    }
+
     let client = match pool.get_client().await {
         Ok(c) => c,
         Err(response) => return response,
@@ -165,7 +196,15 @@ pub async fn update_bill(
 }
 
 #[post("/bills/upload")]
-pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> impl Responder {
+pub async fn upload_bills(
+    pool: web::Data<DbPool>,
+    mut payload: Multipart,
+    req: HttpRequest,
+) -> impl Responder {
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
     let mut data_group: Option<i32> = None;
     let mut files_to_process: Vec<(String, Vec<u8>)> = Vec::new();
 
@@ -211,6 +250,10 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
             }));
         }
     };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     let storage_path = {
         let client = match pool.get_client().await {
@@ -292,7 +335,8 @@ pub async fn upload_bills(pool: web::Data<DbPool>, mut payload: Multipart) -> im
             final_file_data = file_data.clone();
         }
 
-        let final_file_data = match image_processor::compress_and_resize(&final_file_data, 1920, 85) {
+        let final_file_data = match image_processor::compress_and_resize(&final_file_data, 1920, 85)
+        {
             Ok(compressed) => {
                 log::info!(
                     "Compressed '{}': {} bytes -> {} bytes",
@@ -407,12 +451,22 @@ pub async fn delete_bill(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let id = path.into_inner();
     let data_group = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     let storage_path = {
         let client = match pool.get_client().await {

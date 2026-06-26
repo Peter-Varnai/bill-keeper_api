@@ -13,19 +13,38 @@ nix develop
 ### Build & Run
 ```bash
 cargo build          # Build the project
-cargo run           # Run the API server (requires PostgreSQL)
+cargo run            # Run the API server (requires PostgreSQL)
 ```
 
 ### Development
 ```bash
-cargo check        # Type-check without building
-cargo fmt          # Format code (run before committing)
-cargo clippy       # Linter warnings
+cargo check          # Type-check without building
+cargo fmt            # Format code (run before committing)
+cargo clippy         # Linter warnings
 ```
 
 ### Database Setup
 - Requires PostgreSQL database configured via `.env` file
-- Environment variables: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
+- Environment variables:
+
+| Variable           | Purpose                    | Default        |
+|--------------------|----------------------------|----------------|
+| `POSTGRES_HOST`    | Database host              | —              |
+| `POSTGRES_PORT`    | Database port              | —              |
+| `POSTGRES_DB`      | Database name              | —              |
+| `POSTGRES_USER`    | Database user              | —              |
+| `POSTGRES_PASSWORD`| Database password          | —              |
+| `PORT`             | HTTP server port           | `8080`         |
+| `TESTING`          | Skip `.env` loading (e2e)  | —              |
+
+- `.env.test` format (same keys, used for e2e tests):
+```
+POSTGRES_HOST=...
+POSTGRES_PORT=5432
+POSTGRES_USER="bill_keeper_testing"
+POSTGRES_PASSWORD="..."
+POSTGRES_DB=bill_keeper_testing
+```
 
 ---
 
@@ -114,21 +133,111 @@ pub async fn handler(
 
 ```
 src/
-├── main.rs          # Entry point, server setup
-├── db/             # Database connection pool
-├── handlers/        # HTTP route handlers
-├── helpers/         # Utility functions
-├── middleware/    # Custom middleware
-├── models/         # Data models
-├── routes/         # Route configuration
-└��─ services/     # Business logic (PDF conversion)
+├── main.rs          # Entry point, server setup, CORS, logger
+├── db/
+│   └── mod.rs       # DbPool (deadpool-postgres), log_db_error()
+├── handlers/        # HTTP route handlers (1 file per resource)
+│   ├── mod.rs
+│   ├── application_reports.rs
+│   ├── bills.rs
+│   ├── data_groups.rs
+│   ├── ear.rs
+│   ├── expenses.rs
+│   ├── images.rs
+│   ├── reports.rs
+│   ├── summaries.rs
+│   └── utild.rs
+├── helpers/         # get_data_group_url(), sanitize_filename()
+│   ├── mod.rs
+│   └── helpers.rs
+├── middleware/
+│   ├── mod.rs
+│   └── logging.rs   # RequestLogger — logs method/path/status/duration
+├── models/          # Data structures split by role
+│   ├── mod.rs
+│   ├── entities.rs  # Bill, Expense, ApplicationReport, DataGroup, etc.
+│   ├── requests.rs  # CreateExpenseRequest, BillUpdateRequest, etc.
+│   └── responses.rs # Summary, EarTotals, Report, CsvImportResult, etc.
+├── routes/
+│   └── mod.rs       # Registers all handlers under /api scope
+└── services/        # Business logic (calculations, image processing, PDF)
+    ├── mod.rs       # calculate_summaries(), calculate_ear_totals(), etc.
+    ├── image_processor.rs
+    └── pdf_converter.rs
 ```
 
 ---
 
-## Recommended Behavior Patterns
+## CORS Configuration
 
-<!-- Uncomment and customize the following as needed -->
+In `main.rs`:
+```rust
+Cors::default()
+    .allowed_origin("http://localhost:5173")
+    .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
+    .allowed_headers(vec![http::header::CONTENT_TYPE, http::header::ACCEPT])
+    .supports_credentials()
+    .max_age(3600);
+```
+
+- Only allows the Vite dev server origin. If the frontend origin or port changes, update this.
+
+---
+
+## API Endpoints Overview
+
+All 26 endpoints under `/api/` scope:
+
+| Resource             | Method   | Path                                        |
+|----------------------|----------|---------------------------------------------|
+| Bills                | GET      | `/api/bills`                                |
+| Bills                | GET      | `/api/bills/{id}`                           |
+| Bills                | PUT      | `/api/bills`                                |
+| Bills                | POST     | `/api/bills/upload` (multipart)             |
+| Bills                | DELETE   | `/api/bills/{id}`                           |
+| Expenses             | GET      | `/api/expenses`                             |
+| Expenses             | POST     | `/api/expenses`                             |
+| Expenses             | POST     | `/api/expenses/bulk` (CSV import)           |
+| Expenses             | PATCH    | `/api/expenses/{id}/bill`                   |
+| Expenses             | PATCH    | `/api/expenses/{id}/type`                   |
+| Expenses             | PATCH    | `/api/expenses/{id}/application`            |
+| Expenses             | PATCH    | `/api/expenses/{id}/cash`                   |
+| Expenses             | DELETE   | `/api/expenses/{id}`                        |
+| Summaries            | GET      | `/api/summaries`                            |
+| EAR                  | GET      | `/api/ear`                                  |
+| Reports              | GET      | `/api/reports`                              |
+| Images               | GET      | `/api/images/{filename}`                    |
+| Data Groups          | GET      | `/api/data_groups`                          |
+| Data Groups          | POST     | `/api/data_groups`                          |
+| Data Groups          | DELETE   | `/api/data_groups/{id}` (cascading)         |
+| Application Reports  | GET      | `/api/application_reports`                  |
+| Application Reports  | POST     | `/api/application_reports`                  |
+| Application Reports  | PATCH    | `/api/application_reports/{id}`             |
+| Application Reports  | DELETE   | `/api/application_reports/{id}`             |
+| Utility Data         | GET      | `/api/utild`                                |
+| Utility Data         | PUT      | `/api/utild`                                |
+
+All list endpoints require `?data_group=<id>` query parameter.
+There is **no authentication, no pagination, no rate limiting**.
+
+---
+
+## Key Dependencies
+
+- `actix-web` — HTTP framework
+- `actix-cors` — CORS middleware
+- `actix-multipart` — File upload handling (bills)
+- `actix-files` — Static file serving (images)
+- `deadpool-postgres` / `tokio-postgres` — Connection pool + async PostgreSQL
+- `rust_decimal` — Monetary amounts
+- `csv` — CSV import parsing
+- `image` — Image compression/resizing
+- `pdf2image` — PDF-to-JPG conversion for uploaded bills
+- `simplelog` — Dual logging (terminal + file)
+
+---
+
+## Recommended Behavior Patterns
 
 ### Response Style
 - Keep responses short (1-3 sentences)
@@ -145,17 +254,15 @@ src/
 - Use grep/glob for exploration
 - Use Bash for commands only (no file operations)
 
-
 ---
 
 ## Common Operations
 
 ### Adding a New Handler
 1. Create new file in `src/handlers/`
-2. Define request/response models in `src/models/`
+2. Define request/response models in `src/models/` (entities in `entities.rs`, request types in `requests.rs`, response types in `responses.rs`)
 3. Register route in `src/routes/mod.rs`
 4. Export module in `src/handlers/mod.rs`
-
 
 ### Running a Single Test
 ```bash
@@ -169,15 +276,24 @@ cargo test --test e2e -- --test-threads=1
 
 **Important:** Tests MUST run sequentially due to shared database state. Running with multiple threads will cause PostgreSQL catalog conflicts.
 
-When working on E2E tests, always use and or expand the TestError struct in tests/error.rs.
-When working on the E2E tests, always check the models the backend is expecting to receive and the model the frontend is sending back. The root directory of the frontend can be found in /home/peter/projects/bill_keeper/frontend/
+When working on E2E tests, always use and or expand the TestError struct in `tests/src/error.rs`.
+When working on the E2E tests, always check the models the backend is expecting to receive and the model the frontend is sending back. The root directory of the frontend can be found in `/home/peter/projects/bill_keeper/frontend/`.
+
+E2E test suite covers **expenses** (8 tests: get, create, update_bill, update_type, update_application, update_cash, delete, bulk_import), **data_groups** (1 test: get), and **bills** (7 tests: get, get_by_id, update, delete, upload_jpg, upload_png, upload_pdf, upload_unsupported).
 
 E2E tests require:
-- PostgreSQL running with credentials in `.env.test` file
+- PostgreSQL running with credentials in `.env.test` file (user: `bill_keeper_testing`, database: `bill_keeper_testing`)
 - The test will:
   1. Connect to `bill_keeper_testing` database as `bill_keeper_testing` user
   2. DROP and CREATE tables from `schema.sql`
   3. INSERT seed data from `seed_data.sql`
-  4. Spawn the API server binary on port 8090 (with TESTING=true)
-  5. Run e2e tests for GET /api/expenses endpoint
+  4. Spawn the API server binary on port **8090** (with `TESTING=true`)
+  5. Run all e2e tests sequentially
   6. Tear down: DROP tables and kill server
+
+---
+
+## Related Services
+
+- **Frontend:** `/home/peter/projects/bill_keeper/frontend/` — React SPA, expects API on port 8080
+- **Workers:** `/home/peter/projects/bill_keeper/workers/` — PDF/XLSX generation on port 8082

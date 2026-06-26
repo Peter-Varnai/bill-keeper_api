@@ -1,7 +1,8 @@
+use crate::auth::get_user_id;
 use crate::db::DbPool;
-use crate::helpers::get_data_group_url;
+use crate::helpers::{get_data_group_url, verify_data_group_ownership};
 use crate::services::calculate_ear_totals;
-use actix_web::{get, web, HttpResponse, Responder};
+use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -16,11 +17,21 @@ struct EarResponse {
 pub async fn get_ear(
     pool: web::Data<DbPool>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let group_id = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, group_id, user_id).await {
+        return response;
+    }
 
     let client = match pool.get_client().await {
         Ok(c) => c,

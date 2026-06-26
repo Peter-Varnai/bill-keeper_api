@@ -39,3 +39,34 @@ pub fn sanitize_filename(filename: &str) -> String {
         .replace('\n', "")
         .replace('\r', "")
 }
+
+pub async fn verify_data_group_ownership(
+    pool: &crate::db::DbPool,
+    data_group_id: i32,
+    user_id: i32,
+) -> Result<(), HttpResponse> {
+    let client = match pool.get_client().await {
+        Ok(c) => c,
+        Err(response) => return Err(response),
+    };
+
+    let result = client
+        .query_opt(
+            "SELECT id FROM data_groups WHERE id = $1 AND user_id = $2",
+            &[&data_group_id, &user_id],
+        )
+        .await;
+
+    match result {
+        Ok(Some(_)) => Ok(()),
+        Ok(None) => Err(HttpResponse::Forbidden().json(serde_json::json!({
+            "error": "Access denied: you do not own this data group"
+        }))),
+        Err(e) => {
+            crate::db::log_db_error("verify_data_group_ownership", &e);
+            Err(HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": "Database error during ownership check"
+            })))
+        }
+    }
+}

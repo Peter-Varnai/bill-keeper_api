@@ -1,19 +1,30 @@
+use crate::auth::get_user_id;
 use crate::db::DbPool;
-use crate::helpers::get_data_group_url;
-use crate::models::{BillToHtml, BelegaufstellungItem};
+use crate::helpers::{get_data_group_url, verify_data_group_ownership};
+use crate::models::BelegaufstellungItem;
 use crate::services::get_expense_type_name;
-use actix_web::{get, web, HttpResponse, Responder};
+use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use std::collections::HashMap;
 
 #[get("/reports")]
 pub async fn get_report(
     pool: web::Data<DbPool>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let data_group = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     let application_report_id = query
         .get("application_report_id")

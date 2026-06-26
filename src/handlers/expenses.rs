@@ -1,7 +1,8 @@
+use crate::auth::get_user_id;
 use crate::db::DbPool;
-use crate::helpers::{get_data_group_req, get_data_group_url};
+use crate::helpers::{get_data_group_req, get_data_group_url, verify_data_group_ownership};
 use crate::models::{BillNumberUpdate, CreateExpenseRequest, CsvImportRequest, Expense};
-use actix_web::{delete, get, patch, post, web, HttpResponse, Responder};
+use actix_web::{delete, get, patch, post, web, HttpRequest, HttpResponse, Responder};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -10,11 +11,21 @@ use std::str::FromStr;
 pub async fn get_expenses(
     pool: web::Data<DbPool>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let data_group = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     let client = match pool.get_client().await {
         Ok(c) => c,
@@ -62,12 +73,22 @@ pub async fn update_expense_bill(
     path: web::Path<i32>,
     params: web::Json<BillNumberUpdate>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let id = path.into_inner();
     let group_id = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, group_id, user_id).await {
+        return response;
+    }
 
     let client = match pool.get_client().await {
         Ok(c) => c,
@@ -100,12 +121,22 @@ pub async fn update_expense_type(
     path: web::Path<i32>,
     params: web::Json<BillNumberUpdate>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let id = path.into_inner();
     let group_id = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, group_id, user_id).await {
+        return response;
+    }
 
     let client = match pool.get_client().await {
         Ok(c) => c,
@@ -138,12 +169,22 @@ pub async fn update_expense_application(
     path: web::Path<i32>,
     params: web::Json<BillNumberUpdate>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let id = path.into_inner();
     let group_id = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, group_id, user_id).await {
+        return response;
+    }
 
     let client = match pool.get_client().await {
         Ok(c) => c,
@@ -176,12 +217,22 @@ pub async fn update_expense_cash(
     path: web::Path<i32>,
     params: web::Json<BillNumberUpdate>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let id = path.into_inner();
     let group_id = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, group_id, user_id).await {
+        return response;
+    }
 
     let is_cash = params.new_number != 0;
 
@@ -214,11 +265,21 @@ pub async fn update_expense_cash(
 pub async fn create_expense(
     pool: web::Data<DbPool>,
     data: web::Json<CreateExpenseRequest>,
+    req: HttpRequest,
 ) -> impl Responder {
     let data_group = match get_data_group_req(data.data_group) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     if data.partner.trim().is_empty() {
         return HttpResponse::BadRequest().json(serde_json::json!({
@@ -313,11 +374,21 @@ pub struct CsvImportError {
 pub async fn bulk_import_expenses(
     pool: web::Data<DbPool>,
     data: web::Json<CsvImportRequest>,
+    req: HttpRequest,
 ) -> impl Responder {
     let data_group = match crate::helpers::get_data_group_req(data.data_group) {
         Ok(id) => id,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     let client = match pool.get_client().await {
         Ok(c) => c,
@@ -325,8 +396,8 @@ pub async fn bulk_import_expenses(
     };
 
     let mut inserted = 0;
-    let mut duplicates_found = 0;
-    let mut duplicates_skipped = 0;
+    let duplicates_found = 0;
+    let duplicates_skipped = 0;
     let mut errors = Vec::new();
 
     for row in &data.rows {
@@ -380,8 +451,8 @@ pub async fn bulk_import_expenses(
                     &row.partner.trim(),
                     &row.amount,
                     &0,
-                    &Some(0),
-                    &Some(0),
+                    &None::<i32>,
+                    &None::<i32>,
                     &false,
                 ],
             )
@@ -392,7 +463,7 @@ pub async fn bulk_import_expenses(
             Err(e) => {
                 errors.push(CsvImportError {
                     row: row.row_number,
-                    reason: format!("Failed to insert: {}", e),
+                    reason: format!("Failed to insert: {:?}", e),
                 });
             }
         }
@@ -412,12 +483,22 @@ pub async fn delete_expense(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let id = path.into_inner();
     let group_id = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, group_id, user_id).await {
+        return response;
+    }
 
     let client = match pool.get_client().await {
         Ok(c) => c,

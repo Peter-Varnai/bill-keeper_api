@@ -1,4 +1,6 @@
+use crate::auth::get_user_id;
 use crate::db::DbPool;
+use crate::helpers::verify_data_group_ownership;
 use actix_web::{delete, get, post, web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -31,7 +33,15 @@ pub struct CreateDataGroupResponse {
 }
 
 #[get("/data_groups")]
-pub async fn get_data_groups(pool: web::Data<DbPool>) -> impl Responder {
+pub async fn get_data_groups(
+    pool: web::Data<DbPool>,
+    req: actix_web::HttpRequest,
+) -> impl Responder {
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
     let client = match pool.pool.get().await {
         Ok(c) => c,
         Err(e) => {
@@ -44,8 +54,8 @@ pub async fn get_data_groups(pool: web::Data<DbPool>) -> impl Responder {
     let result = client
         .query(
             "SELECT id, name, type, created_at, bills_storage_path 
-             FROM data_groups ORDER BY created_at DESC",
-            &[],
+             FROM data_groups WHERE user_id = $1 ORDER BY created_at DESC",
+            &[&user_id],
         )
         .await;
 
@@ -76,7 +86,13 @@ pub async fn get_data_groups(pool: web::Data<DbPool>) -> impl Responder {
 pub async fn create_data_group(
     pool: web::Data<DbPool>,
     data: web::Json<CreateDataGroupRequest>,
+    req: actix_web::HttpRequest,
 ) -> impl Responder {
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
     if data.group_type != "project" && data.group_type != "organization" {
         return HttpResponse::BadRequest().json(serde_json::json!({
             "error": "Type must be either 'project' or 'organization'"
@@ -96,9 +112,9 @@ pub async fn create_data_group(
 
     let result = client
         .query(
-            "INSERT INTO data_groups (name, type, bills_storage_path) 
-             VALUES ($1, $2, $3) RETURNING id",
-            &[&data.name, &data.group_type, &storage_path],
+            "INSERT INTO data_groups (name, type, bills_storage_path, user_id) 
+             VALUES ($1, $2, $3, $4) RETURNING id",
+            &[&data.name, &data.group_type, &storage_path, &user_id],
         )
         .await;
 
@@ -147,8 +163,20 @@ pub struct DeletedCounts {
 }
 
 #[delete("/data_groups/{id}")]
-pub async fn delete_data_group(pool: web::Data<DbPool>, path: web::Path<i32>) -> impl Responder {
+pub async fn delete_data_group(
+    pool: web::Data<DbPool>,
+    path: web::Path<i32>,
+    req: actix_web::HttpRequest,
+) -> impl Responder {
     let id = path.into_inner();
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, id, user_id).await {
+        return response;
+    }
 
     let client = match pool.pool.get().await {
         Ok(c) => c,

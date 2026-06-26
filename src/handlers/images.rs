@@ -1,7 +1,8 @@
+use crate::auth::get_user_id;
 use crate::db::DbPool;
-use crate::helpers::get_data_group_url;
+use crate::helpers::{get_data_group_url, verify_data_group_ownership};
 use crate::services::image_processor;
-use actix_web::{get, web, HttpResponse, Responder};
+use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -10,6 +11,7 @@ pub async fn get_image(
     pool: web::Data<DbPool>,
     path: web::Path<String>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let filename = path.into_inner();
 
@@ -17,6 +19,15 @@ pub async fn get_image(
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     let storage_path = {
         let client = match pool.get_client().await {

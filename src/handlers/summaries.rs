@@ -1,8 +1,9 @@
+use crate::auth::get_user_id;
 use crate::db::DbPool;
-use crate::helpers::get_data_group_url;
+use crate::helpers::{get_data_group_url, verify_data_group_ownership};
 use crate::models::ApplicationReport;
 use crate::services::calculate_summaries;
-use actix_web::{get, web, HttpResponse, Responder};
+use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
@@ -10,11 +11,21 @@ use std::collections::HashMap;
 pub async fn get_summaries(
     pool: web::Data<DbPool>,
     query: web::Query<HashMap<String, String>>,
+    req: HttpRequest,
 ) -> impl Responder {
     let data_group = match get_data_group_url(&query) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     let application_reports: Vec<ApplicationReport> = {
         let client = match pool.get_client().await {

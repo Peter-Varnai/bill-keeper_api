@@ -1,9 +1,10 @@
 use std::error::Error;
 
+use crate::auth::get_user_id;
 use crate::db::DbPool;
-use crate::helpers::get_data_group_req;
+use crate::helpers::{get_data_group_req, verify_data_group_ownership};
 use crate::models::{ApplicationReport, CreateApplicationReportRequest};
-use actix_web::{delete, get, patch, post, web, HttpResponse, Responder};
+use actix_web::{delete, get, patch, post, web, HttpRequest, HttpResponse, Responder};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -22,11 +23,21 @@ pub struct UpdateApplicationReportRequest {
 pub async fn get_application_reports(
     pool: web::Data<DbPool>,
     query: web::Query<GetApplicationReportsQuery>,
+    req: HttpRequest,
 ) -> impl Responder {
     let data_group = match get_data_group_req(query.data_group) {
         Ok(c) => c,
         Err(response) => return response,
     };
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     let client = match pool.get_client().await {
         Ok(c) => c,
@@ -71,7 +82,17 @@ pub async fn get_application_reports(
 pub async fn create_application_report(
     pool: web::Data<DbPool>,
     data: web::Json<CreateApplicationReportRequest>,
+    req: HttpRequest,
 ) -> impl Responder {
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data.data_group, user_id).await {
+        return response;
+    }
+
     let client = match pool.get_client().await {
         Ok(c) => c,
         Err(response) => return response,
@@ -119,8 +140,42 @@ pub async fn update_application_report(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
     data: web::Json<UpdateApplicationReportRequest>,
+    req: HttpRequest,
 ) -> impl Responder {
     let id = path.into_inner();
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
+
+    {
+        let client = match pool.get_client().await {
+            Ok(c) => c,
+            Err(response) => return response,
+        };
+
+        let group_id: Option<i32> = match client
+            .query_opt(
+                "SELECT data_group FROM application_reports WHERE id = $1",
+                &[&id],
+            )
+            .await
+        {
+            Ok(Some(row)) => Some(row.get(0)),
+            _ => None,
+        };
+
+        if let Some(gid) = group_id {
+            if let Err(response) = verify_data_group_ownership(&pool, gid, user_id).await {
+                return response;
+            }
+        } else {
+            return HttpResponse::NotFound().json(serde_json::json!({
+                "error": "Application report not found"
+            }));
+        }
+    }
 
     if data.name.is_none() && data.amount.is_none() && data.submission_deadline.is_none() {
         return HttpResponse::BadRequest().json(serde_json::json!({
@@ -187,8 +242,14 @@ pub async fn update_application_report(
 pub async fn delete_application_report(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
+    req: HttpRequest,
 ) -> impl Responder {
     let id = path.into_inner();
+
+    let user_id = match get_user_id(&req) {
+        Ok(id) => id,
+        Err(response) => return response,
+    };
 
     let group_id: Option<i32> = {
         let client = match pool.get_client().await {
@@ -216,6 +277,10 @@ pub async fn delete_application_report(
             }));
         }
     };
+
+    if let Err(response) = verify_data_group_ownership(&pool, data_group, user_id).await {
+        return response;
+    }
 
     {
         let client = match pool.get_client().await {

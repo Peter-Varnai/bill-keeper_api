@@ -2,6 +2,13 @@ use actix_web::web;
 
 pub fn config(cfg: &mut web::ServiceConfig) {
     cfg.service(
+        web::scope("/api/auth")
+            .route("/register", web::post().to(crate::auth::register))
+            .route("/login", web::post().to(crate::auth::login))
+            .route("/me", web::get().to(crate::auth::me)),
+    );
+
+    cfg.service(
         web::scope("/api")
             .service(crate::handlers::bills::get_bills)
             .service(crate::handlers::bills::get_bill)

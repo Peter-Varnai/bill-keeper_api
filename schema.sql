@@ -1,4 +1,12 @@
--- Schema for bill_keeper API e2e testing
+-- Schema for bill_keeper
+
+-- Users table
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at VARCHAR(50) DEFAULT now()
+);
 
 -- Data Groups table
 CREATE TABLE IF NOT EXISTS data_groups (
@@ -7,6 +15,7 @@ CREATE TABLE IF NOT EXISTS data_groups (
     type TEXT NOT NULL CHECK (type = ANY (ARRAY['project'::text, 'organization'::text])),
     created_at VARCHAR(50) DEFAULT now(),
     bills_storage_path TEXT NOT NULL DEFAULT 'pdf_imgs/',
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     UNIQUE (name)
 );
 
@@ -54,5 +63,3 @@ CREATE TABLE IF NOT EXISTS utility_data (
     UNIQUE(data_group, key)
 );
 
-INSERT INTO data_groups (id, name, type, created_at, bills_storage_path)
-VALUES (0, '2026', 'organization', '2026-01-01 00:00:00', 'pdf_imgs/2025');

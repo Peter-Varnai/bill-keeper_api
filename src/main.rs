@@ -5,6 +5,7 @@ use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, W
 use std::env;
 use std::fs::OpenOptions;
 
+mod auth;
 mod db;
 mod handlers;
 mod helpers;
@@ -14,7 +15,36 @@ mod routes;
 mod services;
 
 use db::DbPool;
+use middleware::auth::AuthMiddleware;
 use middleware::logging::RequestLogger;
+
+async fn ensure_default_admin(pool: &DbPool) {
+    let client = match pool.get_client().await {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let count = client
+        .query_one("SELECT COUNT(*) FROM users", &[])
+        .await
+        .map(|r| r.get::<_, i64>(0))
+        .unwrap_or(0);
+
+    if count == 0 {
+        let password_hash = bcrypt::hash("admin", bcrypt::DEFAULT_COST).unwrap_or_default();
+        let result = client
+            .execute(
+                "INSERT INTO users (id, username, password_hash) VALUES (1, 'admin', $1)",
+                &[&password_hash],
+            )
+            .await;
+
+        match result {
+            Ok(_) => info!("Default admin user created (username: admin, password: admin)"),
+            Err(e) => log::error!("Failed to create default admin user: {}", e),
+        }
+    }
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -50,6 +80,7 @@ async fn main() -> std::io::Result<()> {
     let db_pool = match DbPool::new().await {
         Ok(pool) => {
             info!("Successfully connected to PostgreSQL database");
+            ensure_default_admin(&pool).await;
             web::Data::new(pool)
         }
         Err(e) => {
@@ -65,12 +96,17 @@ async fn main() -> std::io::Result<()> {
         let cors = Cors::default()
             .allowed_origin("http://localhost:5173")
             .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
-            .allowed_headers(vec![http::header::CONTENT_TYPE, http::header::ACCEPT])
+            .allowed_headers(vec![
+                http::header::CONTENT_TYPE,
+                http::header::ACCEPT,
+                http::header::AUTHORIZATION,
+            ])
             .supports_credentials()
             .max_age(3600);
 
         App::new()
             .wrap(RequestLogger)
+            .wrap(AuthMiddleware)
             .wrap(cors)
             .app_data(db_pool.clone())
             .configure(routes::config)
@@ -85,11 +121,3 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await
 }
-
-//TODO: 1: Postgres user data isolation, make sure the user can not access other users data buy simply
-//changing the stored data_group value in the local storage.
-//
-//2: at the moment, uploaded bills are identified by their uniqe index that auto
-//   inceremnts, when viewing the uploaded bills of a datagroup, the list is identifying the bills
-//   by their index, it can happen that in a fresh data_group the identifier of their first
-//   uploaded bill is no. 219

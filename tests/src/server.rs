@@ -16,6 +16,10 @@ pub fn start() -> Result<Child, TestError> {
             "POSTGRES_PASSWORD",
             std::env::var("POSTGRES_PASSWORD").unwrap(),
         )
+        .env(
+            "JWT_SECRET",
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| "test-secret".to_string()),
+        )
         .current_dir("/home/peter/projects/bill_keeper/api-service")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
