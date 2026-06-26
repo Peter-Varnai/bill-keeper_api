@@ -73,6 +73,14 @@ async fn test_data_groups_get() {
 }
 
 #[tokio::test]
+async fn test_data_groups_create() {
+    src::config::load_env();
+    src::handlers::data_groups::test_data_groups_create()
+        .await
+        .expect("failed");
+}
+
+#[tokio::test]
 async fn test_bills_get() {
     src::config::load_env();
     src::handlers::bills::test_bills_get()

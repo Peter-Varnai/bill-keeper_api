@@ -271,28 +271,22 @@ cargo test test_name_here
 
 ### Running E2E Tests
 ```bash
-cargo test --test e2e -- --test-threads=1
+cargo test --test e2e
 ```
 
-**Important:** Tests MUST run sequentially due to shared database state (each test drops/recreates tables). Running with multiple threads will cause PostgreSQL catalog conflicts.
+Tests run in parallel against a single shared server instance. Each test creates an isolated `data_group`, tests within it, and cleans up via cascading delete. No `--test-threads=1` needed.
 
-Each test auto-allocates a unique port (starting from 8090) to avoid AddressInUse between sequential tests.
+**Important:** Tests share one PostgreSQL database (`bill_keeper_testing`) and one server instance (port 8090). A `OnceCell` ensures suite setup (tables + seed + server start + login) happens exactly once per test run.
 
 When working on E2E tests, always use and or expand the TestError struct in `tests/src/error.rs`.
 When working on the E2E tests, always check the models the backend is expecting to receive and the model the frontend is sending back. The root directory of the frontend can be found in `/home/peter/projects/bill_keeper/frontend/`.
 
-E2E test suite covers **expenses** (8 tests: get, create, update_bill, update_type, update_application, update_cash, delete, bulk_import), **data_groups** (1 test: get), and **bills** (7 tests: get, get_by_id, update, delete, upload_jpg, upload_png, upload_pdf, upload_unsupported).
+E2E test suite covers **expenses** (8 tests: get, create, update_bill, update_type, update_application, update_cash, delete, bulk_import), **data_groups** (2 tests: get, create), and **bills** (8 tests: get, get_by_id, update, delete, upload_jpg, upload_png, upload_pdf, upload_unsupported).
 
-E2E tests require:
-- PostgreSQL running with credentials in `.env.test` file (user: `bill_keeper_testing`, database: `bill_keeper_testing`)
-- The test will:
-  1. Connect to `bill_keeper_testing` database as `bill_keeper_testing` user
-  2. DROP and CREATE tables from `schema.sql`
-  3. INSERT test user with bcrypt hash, then seed data from `seed_data.sql`
-  4. Spawn the API server binary on an auto-allocated port starting at 8090 (with `TESTING=true`)
-  5. Login as `test`/`test` to get a JWT token, build an authenticated reqwest client
-  6. Run all e2e tests sequentially
-  7. Tear down: DROP tables and kill server
+E2E test flow:
+- Suite setup (once): drop/create tables from `schema.sql`, insert test user with bcrypt hash, seed `data_group`/bills/expenses from `seed_data.sql`, start API server on port 8090, login as `test`/`test`
+- Per-test: create an isolated `data_group` via API, run test assertions with dynamic `dg_id`, cleanup via cascading `DELETE /api/data_groups/{id}`
+- Suite teardown: server killed on process exit (AutoKillChild), tables dropped on next suite setup
 
 ---
 

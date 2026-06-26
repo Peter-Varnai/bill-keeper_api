@@ -1,5 +1,5 @@
 use super::super::error::TestError;
-use super::super::helpers::{start_test, stop_test};
+use super::super::helpers::{cleanup_test_context, new_test_context};
 
 fn to_err<E: std::fmt::Display>(e: E) -> TestError {
     TestError::Io(std::io::Error::new(
@@ -9,7 +9,7 @@ fn to_err<E: std::fmt::Display>(e: E) -> TestError {
 }
 
 pub async fn test_data_groups_get() -> Result<(), TestError> {
-    let (client, base_url, srv) = start_test().await?;
+    let (client, base_url, _group_name, dg_id) = new_test_context().await?;
 
     let response = client
         .get(format!("{}/api/data_groups", base_url))
@@ -22,11 +22,11 @@ pub async fn test_data_groups_get() -> Result<(), TestError> {
     let groups: Vec<serde_json::Value> = response.json().await.map_err(to_err)?;
     assert!(!groups.is_empty(), "expected non-empty data groups");
 
-    stop_test(srv).await
+    cleanup_test_context(&client, &base_url, dg_id).await
 }
 
 pub async fn test_data_groups_create() -> Result<(), TestError> {
-    let (client, base_url, srv) = start_test().await?;
+    let (client, base_url, _group_name, dg_id) = new_test_context().await?;
 
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -58,14 +58,18 @@ pub async fn test_data_groups_create() -> Result<(), TestError> {
     assert!(result["id"].as_i64().is_some(), "expected id in response");
     assert_eq!(result["name"], unique_name, "expected name match");
 
+    let new_id = result["id"].as_i64().unwrap() as i32;
+
     let storage_path = format!("./public/pdf_imgs/{}", unique_name);
     assert!(
         std::path::Path::new(&storage_path).exists(),
         "expected storage directory to exist"
     );
 
-    // Cleanup: remove directory (DB record left for cleanup)
-    let _ = std::fs::remove_dir_all(&storage_path);
+    let _ = client
+        .delete(format!("{}/api/data_groups/{}", base_url, new_id))
+        .send()
+        .await;
 
-    stop_test(srv).await
+    cleanup_test_context(&client, &base_url, dg_id).await
 }

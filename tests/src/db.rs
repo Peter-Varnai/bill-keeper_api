@@ -12,7 +12,7 @@ const TABLES_IN_ORDER: &[&str] = &[
     "users",
 ];
 
-pub async fn drop_tables(client: &Client) -> Result<(), TestError> {
+async fn drop_tables(client: &Client) -> Result<(), TestError> {
     for table in TABLES_IN_ORDER {
         client
             .execute(&format!("DROP TABLE IF EXISTS {}", table), &[])
@@ -22,7 +22,7 @@ pub async fn drop_tables(client: &Client) -> Result<(), TestError> {
     Ok(())
 }
 
-pub async fn setup() -> Result<Client, TestError> {
+async fn connect() -> Result<Client, TestError> {
     let config = db_config()
         .parse::<tokio_postgres::Config>()
         .map_err(|_| TestError::ConfigParse)?;
@@ -33,6 +33,11 @@ pub async fn setup() -> Result<Client, TestError> {
         .map_err(TestError::Connect)?;
     tokio::spawn(connection);
 
+    Ok(client)
+}
+
+pub async fn suite_setup() -> Result<(), TestError> {
+    let client = connect().await?;
     drop_tables(&client).await?;
 
     let schema = std::fs::read_to_string("schema.sql").map_err(TestError::Io)?;
@@ -57,22 +62,6 @@ pub async fn setup() -> Result<Client, TestError> {
         .simple_query(&seed)
         .await
         .map_err(TestError::Query)?;
-
-    Ok(client)
-}
-
-pub async fn teardown() -> Result<(), TestError> {
-    let config = db_config()
-        .parse::<tokio_postgres::Config>()
-        .map_err(|_| TestError::ConfigParse)?;
-
-    let (client, connection) = config
-        .connect(tokio_postgres::NoTls)
-        .await
-        .map_err(TestError::Connect)?;
-    tokio::spawn(connection);
-
-    drop_tables(&client).await?;
 
     Ok(())
 }
