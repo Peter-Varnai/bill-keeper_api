@@ -1,16 +1,17 @@
 use std::process::Child;
 
-use super::config::TEST_PORT;
+use super::config::allocate_port;
 use super::db;
 use super::error::TestError;
 use super::server;
 
 pub async fn start_test() -> Result<(reqwest::Client, String, Child), TestError> {
+    let port = allocate_port();
     db::setup().await?;
-    let srv = server::start()?;
+    let srv = server::start(port)?;
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    let base_url = format!("http://localhost:{}", TEST_PORT);
+    let base_url = format!("http://localhost:{}", port);
 
     let login_resp = reqwest::Client::new()
         .post(format!("{}/api/auth/login", base_url))

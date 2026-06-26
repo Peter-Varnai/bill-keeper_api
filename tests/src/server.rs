@@ -1,13 +1,13 @@
 use std::process::{Child, Command, Stdio};
 
-use super::config::{BINARY_PATH, TEST_PORT};
+use super::config::BINARY_PATH;
 use super::error::TestError;
 
-pub fn start() -> Result<Child, TestError> {
+pub fn start(port: u16) -> Result<Child, TestError> {
     let child = Command::new(BINARY_PATH)
         .env_clear()
         .env("TESTING", "true")
-        .env("PORT", TEST_PORT.to_string())
+        .env("PORT", port.to_string())
         .env("POSTGRES_HOST", std::env::var("POSTGRES_HOST").unwrap())
         .env("POSTGRES_PORT", std::env::var("POSTGRES_PORT").unwrap())
         .env("POSTGRES_DB", std::env::var("POSTGRES_DB").unwrap())
