@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS data_groups (
     created_at VARCHAR(50) DEFAULT now(),
     bills_storage_path TEXT NOT NULL DEFAULT 'pdf_imgs/',
     user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
-    UNIQUE (name)
+    UNIQUE (name, user_id)
 );
 
 -- Bills table
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     partner TEXT NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
     expense_type INTEGER NOT NULL DEFAULT 0,
-    bill INTEGER DEFAULT 0 REFERENCES bills(id),
+    bill INTEGER REFERENCES bills(id),
     application INTEGER REFERENCES application_reports(id),
     is_cash BOOLEAN DEFAULT false
 );

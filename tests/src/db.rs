@@ -46,9 +46,8 @@ pub async fn suite_setup() -> Result<(), TestError> {
         .await
         .map_err(TestError::Query)?;
 
-    let password_hash = bcrypt::hash("test", bcrypt::DEFAULT_COST).map_err(|e| {
-        TestError::Io(std::io::Error::other(e.to_string()))
-    })?;
+    let password_hash = bcrypt::hash("test", bcrypt::DEFAULT_COST)
+        .map_err(|e| TestError::Io(std::io::Error::other(e.to_string())))?;
     client
         .execute(
             "INSERT INTO users (id, username, password_hash) VALUES (1, 'test', $1)",
@@ -58,10 +57,7 @@ pub async fn suite_setup() -> Result<(), TestError> {
         .map_err(TestError::Query)?;
 
     let seed = std::fs::read_to_string("seed_data.sql").map_err(TestError::Io)?;
-    client
-        .simple_query(&seed)
-        .await
-        .map_err(TestError::Query)?;
+    client.simple_query(&seed).await.map_err(TestError::Query)?;
 
     Ok(())
 }

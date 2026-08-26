@@ -64,6 +64,14 @@ pub struct BillNumberUpdate {
     pub new_number: i32,
 }
 
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+pub struct UpdateExpenseBillRequest {
+    #[allow(dead_code)]
+    pub expense_id: i32,
+    pub new_number: Option<i32>,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct BillUpdateRequest {
     pub id: i32,

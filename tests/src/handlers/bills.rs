@@ -14,7 +14,8 @@ async fn upload_test_bill(
     dg_id: i32,
 ) -> Result<i32, TestError> {
     let file_data = std::fs::read("tests/test_docs/table1.jpg").map_err(to_err)?;
-    let filename = format!("bill_{}.jpg",
+    let filename = format!(
+        "bill_{}.jpg",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -40,7 +41,8 @@ async fn upload_test_bill(
     assert_eq!(resp.status().as_u16(), 200, "upload failed");
 
     let result: serde_json::Value = resp.json().await.map_err(to_err)?;
-    result["results"][0]["bill_id"].as_i64()
+    result["results"][0]["bill_id"]
+        .as_i64()
         .map(|id| id as i32)
         .ok_or_else(|| to_err("no bill id returned"))
 }

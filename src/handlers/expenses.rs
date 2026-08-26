@@ -1,7 +1,9 @@
 use crate::auth::get_user_id;
 use crate::db::DbPool;
 use crate::helpers::{get_data_group_req, get_data_group_url, verify_data_group_ownership};
-use crate::models::{BillNumberUpdate, CreateExpenseRequest, CsvImportRequest, Expense};
+use crate::models::{
+    BillNumberUpdate, CreateExpenseRequest, CsvImportRequest, Expense, UpdateExpenseBillRequest,
+};
 use actix_web::{delete, get, patch, post, web, HttpRequest, HttpResponse, Responder};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -71,7 +73,7 @@ pub async fn get_expenses(
 pub async fn update_expense_bill(
     pool: web::Data<DbPool>,
     path: web::Path<i32>,
-    params: web::Json<BillNumberUpdate>,
+    params: web::Json<UpdateExpenseBillRequest>,
     query: web::Query<HashMap<String, String>>,
     req: HttpRequest,
 ) -> impl Responder {
@@ -95,16 +97,22 @@ pub async fn update_expense_bill(
         Err(response) => return response,
     };
 
+    let bill: Option<i32> = params.new_number.filter(|n| *n > 0);
+
     let result = client
         .execute(
             "UPDATE expenses SET bill = $1 WHERE id = $2 AND data_group = $3",
-            &[&params.new_number, &id, &group_id],
+            &[&bill, &id, &group_id],
         )
         .await;
 
     match result {
         Ok(_) => HttpResponse::Ok().json(serde_json::json!({
-            "message": format!("Updated bill number to {} for expense {}", params.new_number, id)
+            "message": format!(
+                "Updated bill number to {} for expense {}",
+                bill.map_or("none".to_string(), |b| b.to_string()),
+                id
+            )
         })),
         Err(e) => {
             crate::db::log_db_error("update_expense_bill", &e);

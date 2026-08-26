@@ -14,7 +14,8 @@ async fn create_test_bill(
     dg_id: i32,
 ) -> Result<i32, TestError> {
     let file_data = std::fs::read("tests/test_docs/table1.jpg").map_err(to_err)?;
-    let filename = format!("bill_{}.jpg",
+    let filename = format!(
+        "bill_{}.jpg",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -41,7 +42,8 @@ async fn create_test_bill(
     if status != 200 {
         let body = resp.text().await.unwrap_or_default();
         return Err(to_err(format!(
-            "create_test_bill failed (status {}): {}", status, body
+            "create_test_bill failed (status {}): {}",
+            status, body
         )));
     }
 
@@ -53,9 +55,10 @@ async fn create_test_bill(
         .map(|r| r["bill_id"].as_i64().unwrap() as i32)
         .collect();
 
-    bill_ids.first().copied().ok_or_else(|| {
-        to_err("no bill id returned from upload")
-    })
+    bill_ids
+        .first()
+        .copied()
+        .ok_or_else(|| to_err("no bill id returned from upload"))
 }
 
 async fn create_test_app_report(
@@ -191,6 +194,45 @@ pub async fn test_expenses_update_bill() -> Result<(), TestError> {
         .map_err(to_err)?;
 
     assert_eq!(response.status().as_u16(), 200, "expected 200 OK");
+
+    let clear_payload = serde_json::json!({
+        "expense_id": expense_id,
+        "new_number": null
+    });
+
+    let response = client
+        .patch(format!("{}/api/expenses/{}/bill", base_url, expense_id))
+        .query(&[("data_group", &dg_id.to_string())])
+        .json(&clear_payload)
+        .send()
+        .await
+        .map_err(to_err)?;
+
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "expected 200 OK when clearing bill"
+    );
+
+    let expenses: Vec<serde_json::Value> = client
+        .get(format!("{}/api/expenses", base_url))
+        .query(&[("data_group", &dg_id.to_string())])
+        .send()
+        .await
+        .map_err(to_err)?
+        .json()
+        .await
+        .map_err(to_err)?;
+
+    let cleared = expenses
+        .iter()
+        .find(|e| e["id"].as_i64().unwrap() == expense_id as i64)
+        .expect("expense should still exist");
+    assert_eq!(
+        cleared["bill"],
+        serde_json::Value::Null,
+        "bill should be null after clearing"
+    );
 
     cleanup_test_context(&client, &base_url, dg_id).await
 }

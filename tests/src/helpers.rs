@@ -53,9 +53,7 @@ async fn get_suite() -> Result<&'static SuiteState, TestError> {
 
             let token = auth["token"]
                 .as_str()
-                .ok_or_else(|| {
-                    TestError::Io(std::io::Error::other("no token in login response"))
-                })?
+                .ok_or_else(|| TestError::Io(std::io::Error::other("no token in login response")))?
                 .to_string();
 
             Ok(SuiteState {
@@ -118,15 +116,14 @@ pub async fn new_test_context() -> Result<(reqwest::Client, String, String, i32)
         .ok_or_else(|| TestError::Io(std::io::Error::other("no id in create response")))?
         as i32;
 
-    Ok((
-        client,
-        suite.base_url.clone(),
-        group_name,
-        dg_id,
-    ))
+    Ok((client, suite.base_url.clone(), group_name, dg_id))
 }
 
-pub async fn cleanup_test_context(client: &reqwest::Client, base_url: &str, dg_id: i32) -> Result<(), TestError> {
+pub async fn cleanup_test_context(
+    client: &reqwest::Client,
+    base_url: &str,
+    dg_id: i32,
+) -> Result<(), TestError> {
     let resp = client
         .delete(format!("{}/api/data_groups/{}", base_url, dg_id))
         .send()
