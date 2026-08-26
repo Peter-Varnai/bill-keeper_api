@@ -12,6 +12,12 @@
 
 *.log
 /tests/test_docs/*
+!/tests/test_docs/table1.jpg
+!/tests/test_docs/Brown-Cat-PNG.png
+!/tests/test_docs/cats.webp
+!/tests/test_docs/IdentificationBooklet_web.pdf
+!/tests/test_docs/disco_debugsheet.csv
+!/tests/test_docs/test_csv.csv
 
 public/*.db
 /docs

@@ -21,7 +21,7 @@ pub fn start() -> Result<Child, TestError> {
             "JWT_SECRET",
             std::env::var("JWT_SECRET").unwrap_or_else(|_| "test-secret".to_string()),
         )
-        .current_dir("/home/peter/projects/bill_keeper/api-service")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
