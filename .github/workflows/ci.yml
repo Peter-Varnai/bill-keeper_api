@@ -68,7 +68,7 @@ jobs:
 
   deploy:
     name: Deploy to server
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push' && secrets.DEPLOY_HOST != '' && secrets.DEPLOY_SSH_KEY != ''
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     needs: [fmt, clippy, test]
     runs-on: ubuntu-latest
     steps:
