@@ -57,7 +57,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            pkg-config libssl-dev libsqlite3-dev \
+            pkg-config libssl-dev \
             clang libclang-dev cmake poppler-utils
       - name: Set LIBCLANG_PATH (flake.nix shellHook)
         run: |
@@ -78,7 +78,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            pkg-config libssl-dev libsqlite3-dev \
+            pkg-config libssl-dev \
             clang libclang-dev cmake poppler-utils
       - name: Set LIBCLANG_PATH (flake.nix shellHook)
         run: |
