@@ -85,10 +85,10 @@ async fn main() -> std::io::Result<()> {
         }
         Err(e) => {
             eprintln!("Failed to connect to PostgreSQL: {}", e);
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Database connection failed: {}", e),
-            ));
+            return Err(std::io::Error::other(format!(
+                "Database connection failed: {}",
+                e
+            )));
         }
     };
 

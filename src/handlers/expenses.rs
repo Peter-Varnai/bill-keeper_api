@@ -344,10 +344,10 @@ pub async fn create_expense(
             let new_id = rows.first().map(|r| r.get::<_, i32>(0)).unwrap_or(0);
             HttpResponse::Created().json(Expense {
                 id: new_id,
-                data_group: data_group,
+                data_group,
                 date: data.date,
                 partner: data.partner.clone(),
-                amount: amount,
+                amount,
                 expense_type: data.expense_type.unwrap_or(0),
                 bill: data.bill,
                 application: data.application,

@@ -2,10 +2,7 @@ use super::super::error::TestError;
 use super::super::helpers::{cleanup_test_context, new_test_context};
 
 fn to_err<E: std::fmt::Display>(e: E) -> TestError {
-    TestError::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        e.to_string(),
-    ))
+    TestError::Io(std::io::Error::other(e.to_string()))
 }
 
 pub async fn test_data_groups_get() -> Result<(), TestError> {

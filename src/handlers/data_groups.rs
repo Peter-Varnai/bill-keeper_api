@@ -122,7 +122,7 @@ pub async fn create_data_group(
         Ok(rows) => {
             let id: i32 = rows.first().map(|r| r.get(0)).unwrap_or(0);
 
-            if let Err(e) = fs::create_dir_all(&format!("./public/{}", storage_path)) {
+            if let Err(e) = fs::create_dir_all(format!("./public/{}", storage_path)) {
                 return HttpResponse::InternalServerError().json(serde_json::json!({
                     "error": format!("Failed to create bills storage folder: {}", e)
                 }));

@@ -292,7 +292,7 @@ pub async fn upload_bills(
             continue;
         }
 
-        let ext = filename.split('.').last().unwrap_or("").to_lowercase();
+        let ext = filename.split('.').next_back().unwrap_or("").to_lowercase();
         if !["jpg", "jpeg", "png", "pdf"].contains(&ext.as_str()) {
             results.push(UploadResult {
                 filename: filename.clone(),
