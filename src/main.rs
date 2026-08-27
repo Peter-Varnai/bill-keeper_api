@@ -92,7 +92,7 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    HttpServer::new(move || {
+    let mut server = HttpServer::new(move || {
         let cors = Cors::default()
             .allowed_origin("http://localhost:5173")
             .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
@@ -110,14 +110,20 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors)
             .app_data(db_pool.clone())
             .configure(routes::config)
-    })
-    .bind((
-        "127.0.0.1",
-        env::var("PORT")
-            .unwrap_or_else(|_| "8080".to_string())
-            .parse()
-            .unwrap(),
-    ))?
-    .run()
-    .await
+    });
+
+    if testing {
+        server = server.workers(8);
+    }
+
+    server
+        .bind((
+            "127.0.0.1",
+            env::var("PORT")
+                .unwrap_or_else(|_| "8080".to_string())
+                .parse()
+                .unwrap(),
+        ))?
+        .run()
+        .await
 }
