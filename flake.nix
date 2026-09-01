@@ -18,7 +18,6 @@
       {
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
-            sqlite
             clang
             llvmPackages.libclang
             pkg-config

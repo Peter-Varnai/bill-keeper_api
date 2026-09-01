@@ -105,4 +105,4 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            sudo -n systemctl restart bills_to_db
+            sudo -n systemctl restart bill_keeper

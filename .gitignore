@@ -11,6 +11,7 @@
 .env.*.local
 
 *.log
+.worktrees
 /tests/test_docs/*
 !/tests/test_docs/table1.jpg
 !/tests/test_docs/Brown-Cat-PNG.png
