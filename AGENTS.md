@@ -10,10 +10,23 @@ This file provides guidelines for agents operating in this repository.
 nix develop
 ```
 
+The dev shell (`flake.nix` → `devShells.default`) provides the full native toolchain:
+`cargo`, `rustc`, `rustfmt`, `clippy`, `clang`/`libclang` (bindgen), `cmake`,
+`pkg-config`, `openssl`, and `poppler-utils` (PDF → JPG for `pdf2image`).
+`LIBCLANG_PATH` is exported by the shellHook. There is no `rustup`; use the
+nix-provided toolchain.
+
 ### Build & Run
 ```bash
 cargo build          # Build the project
 cargo run            # Run the API server (requires PostgreSQL)
+```
+
+### Nix Builds
+```bash
+nix build .#default                     # native x86_64 binary -> result/bin/bill-keeper
+nix build .#arm                         # static aarch64 binary -> result/bin/bill-keeper-aarch64
+nix build -L .#checks.x86_64-linux.e2e  # hermetic e2e (spawns its own PostgreSQL)
 ```
 
 ### Development
@@ -270,6 +283,13 @@ cargo test test_name_here
 ```
 
 ### Running E2E Tests
+
+Hermetic (recommended; boots a throwaway PostgreSQL in the nix sandbox):
+```bash
+nix build -L .#checks.x86_64-linux.e2e
+```
+
+Manual (requires an external PostgreSQL configured via `.env.test`):
 ```bash
 cargo test --test e2e
 ```
@@ -287,6 +307,16 @@ E2E test flow:
 - Suite setup (once): drop/create tables from `schema.sql`, insert test user with bcrypt hash, seed `data_group`/bills/expenses from `seed_data.sql`, start API server on port 8090, login as `test`/`test`
 - Per-test: create an isolated `data_group` via API, run test assertions with dynamic `dg_id`, cleanup via cascading `DELETE /api/data_groups/{id}`
 - Suite teardown: server killed on process exit (AutoKillChild), tables dropped on next suite setup
+
+---
+
+## Deployment
+
+- The production server is **aarch64**. CI runs `nix build .#arm`
+  (`pkgsCross.aarch64-multiplatform.pkgsStatic`, fully static) and copies
+  `result/bin/bill-keeper-aarch64` to `/opt/bill-keeper_api/bill-keeper`, then
+  restarts `bill_keeper.service`.
+- `.#default` (x86_64) is for local/dev/CI testing only.
 
 ---
 

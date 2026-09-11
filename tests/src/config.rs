@@ -1,5 +1,5 @@
 pub const SERVER_PORT: u16 = 8090;
-pub const BINARY_PATH: &str = "./target/debug/bills_to_db";
+pub const BINARY_PATH: &str = "./target/debug/bill-keeper";
 
 pub fn load_env() {
     dotenv::from_filename(".env.test").ok();

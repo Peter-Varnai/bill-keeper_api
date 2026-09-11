@@ -527,7 +527,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bills_to_db"
+name = "bill-keeper"
 version = "0.1.0"
 dependencies = [
  "actix-cors",

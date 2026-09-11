@@ -7,6 +7,7 @@ use super::error::TestError;
 pub fn start() -> Result<Child, TestError> {
     let child = Command::new(BINARY_PATH)
         .env_clear()
+        .env("PATH", std::env::var("PATH").unwrap_or_default())
         .env("TESTING", "true")
         .env("PORT", SERVER_PORT.to_string())
         .env("POSTGRES_HOST", std::env::var("POSTGRES_HOST").unwrap())
